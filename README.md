@@ -24,9 +24,13 @@ Original project: https://gitlab.citius.usc.es/lidar/rule-based-classifier.
       (cd armadillo && makepkg -si --noconfirm)
       ```
  
-The following commands must be executed in the root folder of the project.
-
 - LASTools:
+    First we need the dependencies, listed at https://github.com/LAStools/LAStools:
+    ```bash
+    sudo apt-get install libjpeg62 libpng-dev libtiff-dev libjpeg-dev libz-dev libproj-dev liblzma-dev libjbig-dev libzstd-dev libgeotiff-dev libwebp-dev liblzma-dev libsqlite3-dev
+    ```
+
+    Now we clone the repo and build:
     ```bash
     git clone --depth 1 https://github.com/LAStools/LAStools lib/LAStools
     (cd lib/LAStools && cmake . && make)
@@ -37,13 +41,13 @@ The following commands must be executed in the root folder of the project.
 In the project directory, just execute
   ```bash
   cmake -B build -DCMAKE_BUILD_TYPE=Release .
-  cmake --build build .
+  cmake --build build
   ```
 
 This creates the executable build/rule-based-classifier-cpp.
 
 ### Execution
-    ./build/rule-based-classifier-cpp -i data/ptR_18C.las [-o output_dir]
+    ./build/rule-based-classifier-cpp -i data/alcoy.las [-o output_dir]
 
 ## Authorship
 Grupo de Arquitectura de Computadores (GAC)  
