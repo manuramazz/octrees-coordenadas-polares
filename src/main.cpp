@@ -2,6 +2,9 @@
 #include "handlers.hpp"
 #include "main_options.hpp"
 #include "octree.hpp"
+#include "octree_v2.hpp"
+#include "octree_linear.hpp"
+#include "octree_pointer.hpp"
 #include <filesystem> // Only C++17 and beyond
 #include <iomanip>
 #include <iostream>
@@ -43,5 +46,22 @@ int main(int argc, char *argv[]) {
   std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
 
+  // Global Pointer Octree Creation
+  std::cout << "Building global (pointer) octree..." << std::endl;
+  tw.start();
+  PointerOctree pOctree(points);
+  tw.stop();
+  std::cout << "Time to build global (pointer) octree: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n";
+
+
+/*   // Global Linear Octree Creation
+  std::cout << "Building global (linear) octree..." << std::endl;
+  tw.start();
+  LinearOctree lOctree(points);
+  tw.stop();
+  std::cout << "Time to build global (linear) octree: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n"; */
+  
   return EXIT_SUCCESS;
 }
