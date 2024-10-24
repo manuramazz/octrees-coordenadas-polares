@@ -20,6 +20,24 @@ private:
     uint64_t code;
     uint32_t childMask;
 
+    int getNextChildIndex() {
+        int index;
+        #if defined(__GNUC__)
+        index = childMask ? 32 - __builtin_clz(childMask) : 0;
+        #else
+        if (childMask == 0) {
+            index = 0;
+        } else {
+            index = 0;
+            uint32_t mask = childMask;
+            while (mask >>= 1) {
+                ++index;
+            }
+        }
+        #endif
+        return index;
+    };
+
 public:
     LinearOctree();
     explicit LinearOctree(std::vector<Lpoint>& points);
@@ -29,15 +47,13 @@ public:
     LinearOctree(Point center, float radius, std::vector<Lpoint>& points);
 
     [[nodiscard]] const OctreeV2* getOctant(int index) const override;
-    void setOctant(int index, const OctreeV2& octant) override;
-    void setOctants(const std::vector<OctreeV2>& octants) override;
+    [[nodiscard]] OctreeV2* getOctant(int index) override;
     
-    void addOctant(const OctreeV2& octant) override;
-
     void createOctants() override;
     void clearOctants() override;
 
+    bool maxDepthReached() const override;
+
     // Friend declaration to allow LinearOctreeMap access
     friend class LinearOctreeMap;
-
 };

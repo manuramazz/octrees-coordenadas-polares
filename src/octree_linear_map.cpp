@@ -1,8 +1,8 @@
 #include "octree_linear_map.hpp"
 
 // Internal methods
-const LinearOctree* LinearOctreeMap::getNode(uint64_t locCode) const {
-    const auto iter = nodes.find(locCode);
+LinearOctree* LinearOctreeMap::getNode(uint64_t locCode) {
+    auto iter = nodes.find(locCode);
     return (iter == nodes.end() ? nullptr : &iter->second);
 }
 void LinearOctreeMap::replaceNode(uint64_t locCode, const LinearOctree& node) {
@@ -13,10 +13,10 @@ void LinearOctreeMap::clearNode(uint64_t locCode) {
 }
 
 // Children/parent access methods 
-const LinearOctree* LinearOctreeMap::getChild(uint64_t locCode, int index) const {
+LinearOctree* LinearOctreeMap::getChild(uint64_t locCode, int index) {
     return getNode(getChildCode(locCode, index));
 }
-const LinearOctree* LinearOctreeMap::getParent(uint64_t locCode) const {
+LinearOctree* LinearOctreeMap::getParent(uint64_t locCode) {
     if (getDepth(locCode) <= 1) return nullptr;
     return getNode(getParentCode(locCode));
 }
@@ -31,13 +31,13 @@ void LinearOctreeMap::clearChild(uint64_t locCode, int index) {
 }
 
 // Static bitwise methods
-uint64_t LinearOctreeMap::getParentCode(int locCode) {
+inline uint64_t LinearOctreeMap::getParentCode(int locCode) {
     return locCode >> 3;
 }
-uint64_t LinearOctreeMap::getChildCode(int locCode, int index) {
+inline uint64_t LinearOctreeMap::getChildCode(int locCode, int index) {
     return (locCode << 3) | index;
 }
-size_t LinearOctreeMap::getDepth(uint64_t locCode) {
+inline size_t LinearOctreeMap::getDepth(uint64_t locCode) {
     if (!locCode) return 0;
     #if defined(__GNUC__)
     return (31 - __builtin_clz(locCode)) / 3;

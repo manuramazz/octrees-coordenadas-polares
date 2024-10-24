@@ -140,8 +140,8 @@ const OctreeV2* OctreeV2::findOctant(const Lpoint* p) const
 	else
 	{
 		// If Lpoint is const, fiesta loca!
-		auto octant = *getOctant(octantIdx(p));
-		return octant.findOctant(p);
+		auto octant = getOctant(octantIdx(p));
+		return octant->findOctant(p);
 	}
 
 	return nullptr;
@@ -187,22 +187,24 @@ void OctreeV2::insertPoint(Lpoint* p)
 		if (isEmpty()) { points_.emplace_back(p); }
 		else
 		{
-			if (points_.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS)
+			if (points_.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS && !maxDepthReached())
 			{
 				createOctants(); // Creation of children octree
 				fillOctants();   // Move points from current Octree to its corresponding children.
 				idx = octantIdx(p);
-				auto octant = *getOctant(idx);
-				octant.insertPoint(p);
+				auto octant = getOctant(idx);
+				octant->insertPoint(p);
 			}
-			else { points_.emplace_back(p); }
+			else { 
+				points_.emplace_back(p); 
+			}
 		}
 	}
 	else
 	{
 		idx = octantIdx(p);
-		auto octant = *getOctant(idx);
-		octant.insertPoint(p);
+		auto octant = getOctant(idx);
+		octant->insertPoint(p);
 	}
 }
 
@@ -212,8 +214,8 @@ void OctreeV2::fillOctants()
 	{
 		// Idx of the octant where a point should be inserted.
 		const auto idx = octantIdx(p);
-		auto octant = *getOctant(idx);
-		octant.insertPoint(p);
+		auto octant = getOctant(idx);
+		octant->insertPoint(p);
 	}
 
 	points_.clear();
@@ -328,16 +330,16 @@ void OctreeV2::extractPoint(const Lpoint* p)
 	else
 	{
 		idx = octantIdx(p);
-		auto octant = *getOctant(idx);
-		octant.extractPoint(p);
-		if (octant.isLeaf() && octant.isEmpty())
+		auto octant = getOctant(idx);
+		octant->extractPoint(p);
+		if (octant->isLeaf() && octant->isEmpty())
 		// Leaf has been emptied. Check if all octants are empty leaves, and clear octants_ if so
 		{
 			bool emptyLeaves = true;
 			for (size_t i = 0; emptyLeaves && i < OCTANTS_PER_NODE; i++)
 			{
-				auto octant_i = *getOctant(i);
-				emptyLeaves = octant_i.isLeaf() && octant_i.isEmpty();
+				auto octant_i = getOctant(i);
+				emptyLeaves = octant_i->isLeaf() && octant_i->isEmpty();
 			}
 			if (emptyLeaves) { clearOctants(); }
 		}
@@ -364,8 +366,8 @@ Lpoint* OctreeV2::extractPoint()
 	int i                = 0;
 	for (const auto& octant : getOctants())
 	{
-		auto octant_i = *getOctant(i);
-		if (!octant_i.isLeaf() || !octant_i.isEmpty())
+		auto octant_i = getOctant(i);
+		if (!octant_i->isLeaf() || !octant_i->isEmpty())
 		{
 			nonEmptyOctantId = i;
 			break;
@@ -378,17 +380,17 @@ Lpoint* OctreeV2::extractPoint()
 		std::cerr << "Warning: Found octree with 8 empty octants\n";
 		return nullptr;
 	}
-	auto octant = *getOctant(nonEmptyOctantId);
-	auto* p = octant.extractPoint();
+	auto octant = getOctant(nonEmptyOctantId);
+	auto* p = octant->extractPoint();
 
-	if (octant.isLeaf() && octant.isEmpty())
+	if (octant->isLeaf() && octant->isEmpty())
 	// Leaf has been emptied. Check if all octants are empty leaves, and clear octants_ if so
 	{
 		bool emptyLeaves = true;
 		for (const auto& octant : getOctants())
 		{
-			auto octant_i = *getOctant(i);
-			emptyLeaves = octant_i.isLeaf() && octant_i.isEmpty();
+			auto octant_i = getOctant(i);
+			emptyLeaves = octant_i->isLeaf() && octant_i->isEmpty();
 		}
 		if (emptyLeaves) { clearOctants(); }
 	}

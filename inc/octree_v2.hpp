@@ -24,7 +24,6 @@ class OctreeV2
 
 	static constexpr unsigned int MAX_POINTS        = 100; // Max number of points in leaf
 	static constexpr float        MIN_OCTANT_RADIUS = 0.1; // Minimum radius for octant
-	static constexpr int		  MAX_DEPTH 		= -1; // Maximum depth of the octree
 
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
@@ -36,7 +35,7 @@ class OctreeV2
 	Point                min_{};
 	Point                max_{};
 	float                radius_{};
-
+	bool 				 octantsCreated = false; // Flag to check if octants have been created
 	std::vector<Lpoint*> points_{};
 
 	public:
@@ -49,21 +48,17 @@ class OctreeV2
 	 * Pure virtual functions to be implemented by the octrees (pointer-based, linear)
 	 */
 
-	// Helper functions for getting a given octant or the list	
+	// Helper functions for getting a given octant or the list (constant or not)
 	// Index must be between 0 and 7
-	[[nodiscard]] virtual const OctreeV2* getOctant(int index) const = 0;
-
-
-	// Replace the octants
-	virtual void setOctant(int index, const OctreeV2& octant) = 0;
-	virtual void setOctants(const std::vector<OctreeV2>& octants) = 0;
-
-	// Appends an octant to their list 
-	virtual void addOctant(const OctreeV2& octant) = 0;
+	[[nodiscard]] virtual OctreeV2* getOctant(int index) = 0;
+	[[nodiscard]] const virtual OctreeV2* getOctant(int index) const = 0;
 
 	// Create the octants for the current node
 	virtual void createOctants() = 0;
     virtual void clearOctants() = 0;
+	
+	// Check that linear octrees need since depth is capped at 21 (for 64 bits location codes)
+	virtual bool maxDepthReached() const = 0; 
 
 	// Other getters and setters
 	std::vector<std::reference_wrapper<const OctreeV2>> getOctants() const {
@@ -122,7 +117,7 @@ class OctreeV2
 	void   fillOctants();
 	size_t octantIdx(const Point* p) const;
 
-	[[nodiscard]] inline bool isLeaf() const { getOctants().empty(); }
+	[[nodiscard]] inline bool isLeaf() const { return !octantsCreated; }
 
 	[[nodiscard]] inline bool isEmpty() const { return this->points_.empty(); };
 

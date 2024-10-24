@@ -13,7 +13,7 @@
 class PointerOctree : public OctreeV2
 {
 private:
-    std::vector<OctreeV2> octants_;
+    std::vector<PointerOctree> octants_;
 
 public:
     // Constructors
@@ -25,12 +25,13 @@ public:
     PointerOctree(Point center, float radius, std::vector<Lpoint>& points);
 
     [[nodiscard]] const OctreeV2* getOctant(int index) const override;
-    void setOctant(int index, const OctreeV2& octant) override;
-    void setOctants(const std::vector<OctreeV2>& octants) override;
+    [[nodiscard]] OctreeV2* getOctant(int index) override;
     
-    void addOctant(const OctreeV2& octant) override;
-
     void createOctants() override;
     void clearOctants() override;
 
+    // Pointer-based octrees do not have a depth limit
+    bool maxDepthReached() const override {
+        return false;
+    }
 };

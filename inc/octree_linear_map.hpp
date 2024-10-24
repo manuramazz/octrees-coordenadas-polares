@@ -4,19 +4,20 @@
 
 class LinearOctreeMap {
 private:
-    static constexpr int MAX_DEPTH = 64 / 3;
     std::unordered_map<uint64_t, LinearOctree> nodes;
 
-    const LinearOctree* getNode(uint64_t locCode) const;
+    LinearOctree* getNode(uint64_t locCode);
     void replaceNode(uint64_t locCode, const LinearOctree& node);
     void clearNode(uint64_t locCode);
 
 public:
+    static constexpr int MAX_DEPTH = 64 / 3;
+
     LinearOctreeMap() = default;
     ~LinearOctreeMap() = default;
 
-    const LinearOctree* getChild(uint64_t locCode, int index) const;
-    const LinearOctree* getParent(uint64_t locCode) const;
+    LinearOctree* getChild(uint64_t locCode, int index);
+    LinearOctree* getParent(uint64_t locCode);
     void replaceChild(uint64_t locCode, int index, const LinearOctree& node);
     void replaceParent(uint64_t locCode, const LinearOctree& node);
     void clearChild(uint64_t locCode, int index);
