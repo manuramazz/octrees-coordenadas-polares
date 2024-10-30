@@ -31,22 +31,22 @@ int main(int argc, char *argv[]) {
 
   TimeWatcher tw;
 
-  tw.start();
+  // tw.start();
   std::vector<Lpoint> points = readPointCloud(mainOptions.inputFile);
-  tw.stop();
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
+  // tw.stop();
+  // std::cout << "Number of read points: " << points.size() << "\n";
+  // std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
+  //           << " seconds\n";
 
-  // Global Octree Creation
-  std::cout << "Building global octree..." << std::endl;
-  tw.start();
-  Octree gOctree(points);
-  tw.stop();
-  std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
-  gOctree.writeOctree(gOctreeStream, 0);
+  // // Global Octree Creation
+  // std::cout << "Building global octree..." << std::endl;
+  // tw.start();
+  // Octree gOctree(points);
+  // tw.stop();
+  // std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
+  //           << " seconds\n";
+  // std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
+  // gOctree.writeOctree(gOctreeStream, 0);
 
 
   // Global Pointer Octree Creation
@@ -59,15 +59,13 @@ int main(int argc, char *argv[]) {
   std::ofstream pOctreeStream(mainOptions.outputDirName / "pointer_octree.txt");
   pOctree.writeOctree(pOctreeStream, 0);
 
-  // Global Linear Octree Creation
   std::cout << "Building global (linear) octree..." << std::endl;
+
   tw.start();
   LinearOctree lOctree(points);
   tw.stop();
   std::cout << "Time to build global (linear) octree: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
-  std::ofstream lOctreeStream(mainOptions.outputDirName / "linear_octree.txt");
-  lOctree.writeOctree(lOctreeStream, 0);
 
   return EXIT_SUCCESS;
 }
