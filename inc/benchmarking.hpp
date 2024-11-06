@@ -8,6 +8,10 @@
 #include "TimeWatcher.hpp"
 #include <algorithm>
 #include <numeric>
+#include "octree.hpp"
+#include "octree_v2.hpp"
+#include "octree_linear.hpp"
+#include "octree_pointer.hpp"
 
 namespace benchmarking
 {
@@ -98,6 +102,12 @@ void benchmark(const std::string& description, const size_t repeats, F function,
 	   << " s. Median: " << result.median() << " s. Mean: " << result.mean() << " s. Stdev: " << result.stdev() << "."
 	   << '\n';
 }
+void runBenchmark(const std::vector<Lpoint>& points, Octree& originalOctree, PointerOctree& pointerOctree, 
+    LinearOctree& linearOctree);
+
 } // namespace benchmarking
 
+
+
 #endif /* end of include guard: RULE_BASED_CLASSIFIER_CPP_BENCHMARKING_HPP */
+
