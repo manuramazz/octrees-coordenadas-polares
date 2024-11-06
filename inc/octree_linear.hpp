@@ -78,7 +78,7 @@ private:
      */
     inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) {
         // TODO: it should be 2^depth and not have to add this case, investigate why it wasn't working
-        if(depth == 0){
+        if(depth == 0) {
             x = 0, y = 0, z = 0;
             return;
         }
@@ -87,9 +87,9 @@ private:
         float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
 
         // Get the integer coordinates by multiplying by 2^(depth-1) and then taking floor
-        x = (coords_t) (x_transf * (1 << (depth-1)));
-        y = (coords_t) (y_transf * (1 << (depth-1)));
-        z = (coords_t) (z_transf * (1 << (depth-1)));
+        x = (coords_t) (x_transf * (1 << (depth)));
+        y = (coords_t) (y_transf * (1 << (depth)));
+        z = (coords_t) (z_transf * (1 << (depth)));
     }
 
     /**
@@ -176,6 +176,8 @@ private:
         }
     }
 
+
+
     /**
      * Method for checking whether node is a leaf or an inner node
      * 
@@ -209,8 +211,8 @@ private:
         Vector nodeRadii = getNodeRadii(code);
         Point lowCorner = center - radii;
         x_d = (x + 0.5) * nodeRadii.getX() + lowCorner.getX();
-        y_d = (y + 0.5) * nodeRadii.getY() + lowCorner.getX();
-        z_d = (z + 0.5) * nodeRadii.getZ() + lowCorner.getX();
+        y_d = (y + 0.5) * nodeRadii.getY() + lowCorner.getY();
+        z_d = (z + 0.5) * nodeRadii.getZ() + lowCorner.getZ();
         return Point(x_d, y_d, z_d);
     }
 
@@ -222,12 +224,23 @@ private:
                         radii.getZ()* (1.0f / (1 << depth)));
     }
 
+
+    void printNodeGeometry(morton_t code) {
+        Box bbox = Box(getNodeCenter(code), getNodeRadii(code));
+        std::cout << "Node: ";
+        printMortonCode(code, true);
+        std::cout << "Center: " << bbox.center() << "\n";
+        std::cout << "Radii: " << bbox.radii() << "\n";
+        std::cout << "Lower corner: " << bbox.min() << "\nUpper corner: " << bbox.max() << "\n"; 
+    }
+
+
     inline bool isInside(Point &p, morton_t code) {
         // To check if a node is inside a given code, we compute its morton code at the depth of the node
         // and check whether it is the same
         // The "physical" approach of getting the node center and radii and computing the box would not be
         // accurate since we are only approximating those
-        return isNode(code) && encodeMortonPoint(p, getDepth(code)) == code;
+        return isNode(code) && (encodeMortonPoint(p, getDepth(code)) == code);
     } 
 
     inline bool isNode(morton_t code) {
@@ -240,9 +253,9 @@ private:
         for(int i = 0; i<points.size(); i++) {
             // Shift and scale coordinates into [0, 1]^3
             // x' = ((x - c_x) + r_x) / (2*r_x)
-            coords_t x, y, z;
-            getAnchorCoords(*points[i], depth, x, y, z);
-            morton_t code = encodeMorton(depth, x, y, z);
+            if(i % 1000 == 0)
+                std::cout << *points[i] << std::endl;
+            morton_t code = encodeMortonPoint(*points[i], depth);
             bins[code].push_back(points[i]);
         } 
         
@@ -259,7 +272,8 @@ private:
                 // Push into queue for future subdivision until we have small amount of points
                 if(nodes.size() < 32) {
                     std::cout << "to queue with " << binPoints.size() << " points:\n";
-                    printMortonCode(code, true);
+                    printNodeGeometry(code);
+                    // printMortonCode(code, true);
                 }
                 subdivision_stack.push(node);
             }
@@ -367,40 +381,54 @@ public:
         Point coords = getNodeCenter(parentCode);
         std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
 
-        // Try finding a random point
-        std::srand(std::time(0));
-        int random = rand() % points.size();
-        Point p = points[random];
-        code = 0; // root code
-        bool inMap = nodes.find(code) != nodes.end();
-        std::cout << " code is in map? " <<  inMap << std::endl;
-        std::cout << " code contains point? " << isInside(p, code) << std::endl;
-        
-        std::stack<morton_t> st;
-        st.push(0);
-        std::cout << "seaching for point " << p << "\n";
+        // Search for all points in the octree
         TimeWatcher tw;
-        morton_t point_code = 0;
+        int not_found = 0;
+        std::cout << "Searching all the points in the octree... " << std::endl;
         tw.start();
-        while(!st.empty()) {
-            std::cout << st.size() << "\n";
-            code = st.top();
-            st.pop();
-            if(isInner(code)) {
+        for(int i = 0; i<points.size(); i++) {
+            Point p = points[i];
+            code = 0;
+            int j = 0, k = 0;
+            if(i % 1000 == 0) {
+                std::cout << "Progress: " << ((float) i / (float) points.size()) * 100.0f << "%" << std::endl;
+            }
+
+            bool not_found_flag;
+            while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
+                not_found_flag = true;
                 for(uint8_t index = 0; index < 8; index++) {
                     morton_t childCode = getChildrenCode(code, index);
                     // If the node point is inside, go into the leaf
-                    if(isInside(p, code)) {
-                        st.push(childCode);
+                    k++;
+                    if(k > 1000) {
+                        printNodeGeometry(childCode);
+                        std::cout << "POINT = " << p << " INDEX = " << i << std::endl;
+                    }
+                    if(isInside(p, childCode)) {
+                        if(j > 20) {
+                            printNodeGeometry(childCode);
+                            std::cout << "POINT = " << p << " INDEX = " << i << std::endl;
+                        }
+                        j++;
+                        code = childCode;
+                        not_found_flag = false;
                     }
                 }
-            } else if (isLeaf(code)) {
-                point_code = code;
-                break;
+                if(not_found_flag)
+                    break;
             }
+            
+            if(not_found_flag || !isInside(p, code)) {    
+                not_found++;
+                if(not_found < 1000) {
+                    std::cout << "Could not find the point " << p << std::endl;
+                    printNodeGeometry(code);
+                } 
+            } 
         }
         tw.stop();
-        std::cout << "Found point " << p << " in " << tw.getElapsedMicros() << " ms at node:\n";
-        printMortonCode(point_code, true);
+        std::cout   << "Found " << (points.size() - not_found) << "/" << points.size() 
+                    << " points in the octree in " << tw.getElapsedMicros() << "ms" << std::endl; 
     }
 };
