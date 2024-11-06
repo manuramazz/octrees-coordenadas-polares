@@ -37,7 +37,7 @@ class OctreeV2
 	float                radius_{};
 	bool 				 octantsCreated = false; // Flag to check if octants have been created
 	std::vector<Lpoint*> points_{};
-	// std::vector<Lpoint> points_storage_{}; // Storage for the points in the octree
+	std::vector<Lpoint> points_storage_{}; // Storage for the points in the octree
 	
 	public:
 	OctreeV2();
@@ -226,11 +226,8 @@ class OctreeV2
 			}
 			else
 			{
-				auto octants = octree.getOctants();
-				std::copy_if(std::begin(octants), std::end(octants), std::back_inserter(toVisit),
-							[&](const OctreeV2& octant) { 
-								return k.boxOverlap(octant.getCenter(), octant.getRadius()); 
-							});
+				std::copy_if(std::begin(octree.getOctants()), std::end(octree.getOctants()), std::back_inserter(toVisit),
+				             [&](const OctreeV2& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
 			}
 		}
 
@@ -337,8 +334,7 @@ class OctreeV2
 			}
 			else
 			{
-				auto octants = octree.getOctants();
-				std::copy_if(std::begin(octants), std::end(octants), std::back_inserter(toVisit),
+				std::copy_if(std::begin(octree.getOctants()), std::end(octree.getOctants()), std::back_inserter(toVisit),
 				             [&](const OctreeV2& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
 			}
 		}
@@ -369,8 +365,7 @@ class OctreeV2
 			}
 			else
 			{
-				auto octants = octree.getOctants();
-				std::copy_if(std::begin(octants), std::end(octants), std::back_inserter(toVisit),
+				std::copy_if(std::begin(octree.getOctants()), std::end(octree.getOctants()), std::back_inserter(toVisit),
 				             [&](const OctreeV2& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
 			}
 		}

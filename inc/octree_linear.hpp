@@ -12,8 +12,8 @@
 #include "octree_linear_node.hpp"
 #include "Box.hpp"
 #include <stack>
-#include <map>
 #include <bitset>
+#include <unordered_map>
 #include "libmorton/morton.h"
 
 class LinearOctree {
@@ -24,61 +24,243 @@ private:
 	static constexpr size_t       DEFAULT_KNN       = 100;
 
     /* 
-     * To construct the Morton encodings for a point (p1,p2,p3) on a depth d, we first find its anchor (~ octant center) 
-     * by multiplying each coordinate by 2^l, then we convert it to integer via floor.
+     * Linear Octree
      * 
-     * Once we have the anchor (x,y,z), we Morton encode it by interleaving its most significant 19 bits on each coordinate
+     * To construct the Morton encodings for a point (p1,p2,p3) on a depth d, we first find its anchor (its scaled integer coordinates that
+     * indicate the node center it belongs to) by scaling the point into the cube [0,1]^3, multiplying each coordinate by 2^d and flooring.
      * 
-     * We have a total of 64 bits, 7 go for the depth and 57 for the interleaved anchor coordinates (19 each)
+     * Once we have the anchor (x,y,z) at depth d, we Morton encode it by interleaving its most significant 21 bits on each coordinate
+     * For this purpose we use libmorton, https://github.com/Forceflow/libmorton/tree/main/include/libmorton
      * 
-     * Since the max depth is 19, there are 2 depth bits unused, but allocating them to the other part serves no purpose as we
-     * at least need 3 for another depth level.
+     * The encoding produces a 64 bit number, however the maximum depth is only 19 instead of 21. This is because we also need to store the depth
+     * of the node to form the octree. To do this, we need at least 5 bits, but since another two are unused, we shift a total of 7 bits and put
+     * the current depth at those last 7 bits.   
      * 
-     * Format:
-     * x18y18z18x17y17z17 ... x1y1z1x0y0z0d6...d0
+     * In summary, the format of the codes is:
+     * x18y18z18x17y17z17...x1y1z1x0y0z0d6...d0
+     * 
+     * This implementation is also different from octree.h in the fact that we use a vector of radii instead of a single radius. 
+     * 
+     * A reference implementation was followed: https://github.com/Excalibur-SLE/AdaptOctree/blob/master/adaptoctree/tree.py
+     * 
+     * Although many adaptations were done (conversion to C++, 7 depth bits instead of 15, etc.)
+     * 
      */
-    std::unordered_map<morton_t, LinearOctreeNode*> nodes;
 
-    Point center; // Center of the point cloud at depth level 0
-    Vector radii; // Vector of radii of the point cloud at depth level 0
+    // The map storing the nodes by their morton codes
+    // It contains both internal and leaf nodes, internal nodes don't have any points on them
+    // TODO: there are probably better ways to do this
+    std::unordered_map<morton_t, LinearOctreeNode*> nodes; 
+    
+    // Center of the point cloud at depth level 0
+    Point center;
+
+    // Vector of radii of the point cloud at depth level 0
+    Vector radii; 
+    
+    /**
+     * Some constants and bitmasks useful for working with Morton codes
+     */
+    static constexpr uint8_t DEPTH_BITS = 7;
+    static constexpr uint8_t DEPTH_MASK = 0x7f;
+    static constexpr morton_t NOT_DEPTH_MASK = 0xffffffffffffffff ^ DEPTH_MASK;
+    static constexpr morton_t LAST_DEPTH_BITS_MASK = 0x0000000000000380;
+    static constexpr morton_t NOT_LAST_DEPTH_BITS_MASK = 0xffffffffffffffff ^ LAST_DEPTH_BITS_MASK;
+    static constexpr morton_t X_MASK = 0x9249249249249200;
+    static constexpr morton_t Y_MASK = 0x4924924924924900;
+    static constexpr morton_t Z_MASK = 0x2492492492492480;
+    static constexpr morton_t XY_MASK = X_MASK | Y_MASK;
+    static constexpr morton_t YZ_MASK = Y_MASK | Z_MASK;
+    static constexpr morton_t XZ_MASK = X_MASK | Z_MASK;
+    
+    /*
+     * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
+     */
+    inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) {
+        // TODO: it should be 2^depth and not have to add this case, investigate why it wasn't working
+        if(depth == 0){
+            x = 0, y = 0, z = 0;
+            return;
+        }
+        float x_transf = ((p.getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
+        float y_transf = ((p.getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
+        float z_transf = ((p.getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
+
+        // Get the integer coordinates by multiplying by 2^(depth-1) and then taking floor
+        x = (coords_t) (x_transf * (1 << (depth-1)));
+        y = (coords_t) (y_transf * (1 << (depth-1)));
+        z = (coords_t) (z_transf * (1 << (depth-1)));
+    }
+
+    /**
+     * Methods for encoding and decoding of points into morton codes
+     */
+    static inline morton_t encodeMorton(uint8_t depth, coords_t x, coords_t y, coords_t z) {
+        // Compute the morton code and push point into corresponding bin
+        morton_t code = libmorton::morton3D_64_encode(x, y, z);
+
+        // Pack depth into the key by shifting and then putting key into the tail bits
+        // In an octree, it is needed to distinguish nodes in different depths to allow traversals and so on
+        return (code << DEPTH_BITS) | depth;
+    }
+
+    inline morton_t encodeMortonPoint(const Point& p, uint8_t depth) {
+        // Utility method combining the two above
+        coords_t x, y, z;
+        getAnchorCoords(p, depth, x, y, z);
+        return encodeMorton(depth, x, y, z);
+    }
+
+    static inline void decodeMorton(morton_t code, coords_t &x, coords_t &y, coords_t &z) {
+        // First we unshift to remove the depth bits and get the original code we passed to libmorton
+        code = code >> DEPTH_BITS;
+
+        // Now we can recover the anchor coordinates
+        libmorton::morton3D_64_decode(code, x, y, z);
+    }
+
+    /**
+     * Utility methods for working with Morton codes
+     * TODO: maybe remove the assertions here and do some better error handling
+     */
+    static inline uint8_t getDepth(morton_t code) {
+        return (uint8_t) (code & DEPTH_MASK);
+    }
+
+    static inline morton_t getParentCode(morton_t code) {
+        // To get parent morton code, shift 3 bits to the right and put level-1 in the trailing bits
+        uint8_t depth = getDepth(code);
+        assert(depth > 0);
+        morton_t parent = (code >> 3) & NOT_DEPTH_MASK;
+        return parent | (depth - 1);
+    }
+
+    static inline morton_t getSiblingCode(morton_t code, uint8_t index) {
+        // To get a sibling morton code, just return the code with the last 3 bits before depth bits set to sibling index
+        assert(index >= 0b000 && index <= 0b111);
+        return (code & NOT_LAST_DEPTH_BITS_MASK) | (((morton_t) index) << DEPTH_BITS);
+    }
+
+    static inline morton_t getChildrenCode(morton_t code, uint8_t index) {
+        // To get a child morton code, up the level, shift 3 bits to the right and then or the last 3 bits before
+        // trailing to the sibling index
+        uint8_t depth = getDepth(code);
+        assert(depth < MAX_DEPTH && index >= 0b000 && index <= 0b111);
+        // Shift code one layer to the right, by masking first we make sure the 3 bits where we are going
+        // to put the children are already empty
+        morton_t children = (code & NOT_DEPTH_MASK) << 3;
+        // Put children bits and new level
+        return children | (((morton_t) index) << DEPTH_BITS) | (depth + 1);
+    }
+    
+    static void printMortonCode(coords_t x, coords_t y, coords_t z, morton_t code, bool formatted = false) {
+        std::cout << "Anchor center " << x << ", " << y << ", " << z << "\n";
+        printMortonCode(code, formatted);
+    }
+
+    static void printMortonCode(Point &p, morton_t code, bool formatted = false) {
+        std::cout << "Physical center " << p.getX() << ", " << p.getY() << ", " << p.getZ() << "\n";
+        printMortonCode(code, formatted);
+    }
+
+    static void printMortonCode(morton_t code, bool formatted = false) {
+        // Print the bits in groups of 3 to represent each level
+        if(formatted) {
+            for (int i = 63; i >= 7; i -= 3) {
+                std::cout << std::bitset<3>((code >> (i - 2)) & 0b111) << " ";
+            }
+            // Print the last 7 bits together
+            std::cout << "| " << std::bitset<7>(code & 0b1111111) << "\n";
+        } else {
+            std::cout << std::bitset<64>(code) << "\n";
+        }
+    }
+
+    /**
+     * Method for checking whether node is a leaf or an inner node
+     * 
+     * (We have both methods because of the case where code is not on the map, both return false)
+     */
+    [[nodiscard]] inline bool isLeaf(morton_t code) const { 
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return false;
+        }
+        return it->second->isLeaf();
+    }
+
+    [[nodiscard]] inline bool isInner(morton_t code) const {
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return false;
+        }
+        return !(it->second->isLeaf());
+    }
+    
+    /**
+     * Utility methods for getting geometric information (center, radius, inside check) from a morton code
+     */
+    inline Point getNodeCenter(morton_t code) {
+        // Returns the physical (approximate) physical center of the node
+        coords_t x, y, z;
+        uint8_t depth = getDepth(code);
+        decodeMorton(code, x, y, z);
+        double x_d, y_d, z_d;
+        Vector nodeRadii = getNodeRadii(code);
+        Point lowCorner = center - radii;
+        x_d = (x + 0.5) * nodeRadii.getX() + lowCorner.getX();
+        y_d = (y + 0.5) * nodeRadii.getY() + lowCorner.getX();
+        z_d = (z + 0.5) * nodeRadii.getZ() + lowCorner.getX();
+        return Point(x_d, y_d, z_d);
+    }
+
+    inline Vector getNodeRadii(morton_t code) {
+        // Returns the vector of (approximate) physical radii of the node
+        uint8_t depth = getDepth(code);
+        return Vector(radii.getX() * (1.0f / (1 << depth)), 
+                        radii.getY()* (1.0f / (1 << depth)), 
+                        radii.getZ()* (1.0f / (1 << depth)));
+    }
+
+    inline bool isInside(Point &p, morton_t code) {
+        // To check if a node is inside a given code, we compute its morton code at the depth of the node
+        // and check whether it is the same
+        // The "physical" approach of getting the node center and radii and computing the box would not be
+        // accurate since we are only approximating those
+        return isNode(code) && encodeMortonPoint(p, getDepth(code)) == code;
+    } 
+
+    inline bool isNode(morton_t code) {
+        return nodes.find(code) != nodes.end();
+    }
 
     // Insert points into the octree by computing their bins, and adds nodes to keep processing to the queue
     void insertPoints(std::vector<Lpoint*>& points, uint8_t depth, std::stack<LinearOctreeNode*>& subdivision_stack) {
         std::unordered_map<morton_t, std::vector<Lpoint*>> bins;
         for(int i = 0; i<points.size(); i++) {
-            auto point = points[i];
             // Shift and scale coordinates into [0, 1]^3
             // x' = ((x - c_x) + r_x) / (2*r_x)
-            float x_transf = ((point->getX() - center.getX())  + radii.getX()) / (2 * radii.getX());
-            float y_transf = ((point->getY() - center.getY())  + radii.getY()) / (2 * radii.getY());
-            float z_transf = ((point->getZ() - center.getZ())  + radii.getZ()) / (2 * radii.getZ());
-
-            // Get the integer coordinates by multiplying by 2^depth and then taking floor
-            coords_t x = (coords_t) (x_transf * (1 << depth));
-            coords_t y = (coords_t) (y_transf * (1 << depth));
-            coords_t z = (coords_t) (z_transf * (1 << depth));
-
-            // Compute the morton code and push point into corresponding bin
-            morton_t code = libmorton::morton3D_64_encode(x, y, z);
-
-            // Shift by 7 to pack bit depth into it
-            code = code << 7;
-            code = code | depth;
-
-            bins[code].push_back(point);
+            coords_t x, y, z;
+            getAnchorCoords(*points[i], depth, x, y, z);
+            morton_t code = encodeMorton(depth, x, y, z);
+            bins[code].push_back(points[i]);
         } 
         
         // Add good nodes to the octree, reject and put into subdivision stack the others
         for (auto& [code, binPoints] : bins) {
             auto node = new LinearOctreeNode(binPoints, code, depth);
-            // Insert into octree
-            // TODO: also add min size condition
-            if(binPoints.size() <= MAX_POINTS || depth == MAX_DEPTH ) {
-                assert(nodes.count(code) == 0);
-                // std::cout << "Inserted node " << std::bitset<64>(code) << " with " << binPoints.size() << " points and depth = " << (code & 0x7f) << "\n"; 
-                nodes[code] = node;
-            } else {
+
+            // Insert into octree map (we also keep internal nodes, 
+            // though their vectors of points will be cleared in case we subdivide)
+            nodes[code] = node;
+
+            // TODO: also add min physical size condition
+            if(binPoints.size() > MAX_POINTS && depth < MAX_DEPTH) {
                 // Push into queue for future subdivision until we have small amount of points
+                if(nodes.size() < 32) {
+                    std::cout << "to queue with " << binPoints.size() << " points:\n";
+                    printMortonCode(code, true);
+                }
                 subdivision_stack.push(node);
             }
         }
@@ -94,13 +276,10 @@ public:
         for (auto& point : points) {
             points_p.push_back(&point);
         }
+
         buildOctree(points_p);
 
-        // int total = 0;
-        // for (auto& [code, node] : nodes) {
-        //     total += node->points.size();
-        // }
-        // std::cout << "Total inserted " << total << " out of " << points.size() << " points\n";
+        testOctree(points);
     }
 
 	explicit LinearOctree(std::vector<Lpoint*>& points);
@@ -110,20 +289,118 @@ public:
 	LinearOctree(Point center, float radius, std::vector<Lpoint>& points);
 
     void buildOctree(std::vector<Lpoint*>& points) {
-        // Compute morton code for each point at depth 0        
+        // TODO: usually build process its different, points are sorted globally and then put into bins
+        // Maybe doing something similar but simpler than cornerstone paper https://dl.acm.org/doi/abs/10.1145/3592979.3593417
+        // this is faster and more parallelizable in the future
+        
+        // Add all points to the root node and add to subdivision stack
         std::stack<LinearOctreeNode*> subdivision_stack;
-        insertPoints(points, 0, subdivision_stack);
+        auto node = new LinearOctreeNode(points, 0, 0);
+        nodes[0] = node;
+        std::cout << "to queue with " << points.size() << " points:\n";
+        printMortonCode(0, true);
 
-        // Process points that we still need to subdivide
+        if(points.size() > MAX_POINTS)
+            subdivision_stack.push(node);
+
+        // Process nodes that we still need to subdivide
         while(!subdivision_stack.empty()) {
             auto node = subdivision_stack.top();
             subdivision_stack.pop();
 
             // Reprocess the points in the node
-            insertPoints(node->points, node->depth+1, subdivision_stack);
+            insertPoints(node->points, LinearOctree::getDepth(node->code) + 1, subdivision_stack);
 
-            // Destroy the old node
-            delete node;
+            // Clear the old node points array
+            node->points.clear();
         }
+    }
+
+    void testOctree(std::vector<Lpoint>& points) {
+        // Check all points were inserted correctly
+        int total = 0;
+        for (auto& [code, node] : nodes) {
+            total += node->points.size();
+        }
+        std::cout << "Total inserted " << total << " out of " << points.size() << " points\n";
+
+        // Little test for seeing morton codes 
+        for(int i = 0; i<2; i++){
+            for(int j = 0; j<2; j++) {
+                for(int k = 0; k<2; k++) {
+                    morton_t code = (libmorton::morton3D_64_encode(i, j, k) << 7) | 1;
+                    std::cout << "(" << i << ", " << j << ", " << k << ") code: " 
+                        << std::bitset<64>(code) << "\n";
+                }
+            }
+        }
+
+        // Get center code at depth 3
+        coords_t x, y, z;
+        getAnchorCoords(center, 3, x, y, z);
+        std::cout << "anchor coods: " << x << " " << y << " " << z << "\n";
+        morton_t code = encodeMortonPoint(center, 3);
+        printMortonCode(center, code, true);
+        
+        // Get their children
+        for(int index = 0; index<8; index++) {
+            morton_t childCode = getChildrenCode(code, index);
+            std::cout << "child #" << index << "\n";
+            printMortonCode(childCode, true);
+            Point coords = getNodeCenter(childCode);
+            std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
+        }
+
+        // Get their siblings
+        for(int index = 0; index<8; index++) {
+            morton_t siblingCode = getSiblingCode(code, index);
+            std::cout << "sibling #" << index << "\n";
+            printMortonCode(siblingCode, true);
+            Point coords = getNodeCenter(siblingCode);
+            std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
+        }
+
+        // Get its parent
+        morton_t parentCode = getParentCode(code);
+        std::cout << "parent ";
+        printMortonCode(parentCode, true);
+        Point coords = getNodeCenter(parentCode);
+        std::cout << "center: " << coords.getX() << " " << coords.getY() << " " << coords.getZ() << " " << std::endl;
+
+        // Try finding a random point
+        std::srand(std::time(0));
+        int random = rand() % points.size();
+        Point p = points[random];
+        code = 0; // root code
+        bool inMap = nodes.find(code) != nodes.end();
+        std::cout << " code is in map? " <<  inMap << std::endl;
+        std::cout << " code contains point? " << isInside(p, code) << std::endl;
+        
+        std::stack<morton_t> st;
+        st.push(0);
+        std::cout << "seaching for point " << p << "\n";
+        TimeWatcher tw;
+        morton_t point_code = 0;
+        tw.start();
+        while(!st.empty()) {
+            std::cout << st.size() << "\n";
+            code = st.top();
+            st.pop();
+            if(isInner(code)) {
+                for(uint8_t index = 0; index < 8; index++) {
+                    morton_t childCode = getChildrenCode(code, index);
+                    // If the node point is inside, go into the leaf
+                    if(isInside(p, code)) {
+                        st.push(childCode);
+                    }
+                }
+            } else if (isLeaf(code)) {
+                point_code = code;
+                break;
+            }
+        }
+        tw.stop();
+        std::cout << "Found point " << p << " in " << tw.getElapsedMicros() << " ms at node:\n";
+        printMortonCode(point_code, true);
     }
 };

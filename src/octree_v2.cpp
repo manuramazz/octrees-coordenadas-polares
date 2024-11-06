@@ -187,15 +187,14 @@ void OctreeV2::insertPoints(std::vector<Lpoint>& points)
 		}
 	} else {
 		// Fit all points in the current octree
-		// points_storage_.reserve(points.size());
+		points_storage_.reserve(points.size());
 		points_.reserve(points.size());
 		
 		// Move actual points to storage and update pointers
 		for(int i = 0; i < points.size(); i++)
 		{
-			// points_storage_[i] = points[i];  // Copy the point
-			// points_[i] = &points_storage_[i];  // Store pointer to the copied point
-			points_[i] = &points[i];  // Store pointer to the point
+			points_storage_[i] = points[i];  // Copy the point
+			points_[i] = &points_storage_[i];  // Store pointer to the copied point
 		}
 	}
 }
@@ -224,15 +223,14 @@ void OctreeV2::insertPoints(std::vector<Lpoint*>& points)
 		}
 	} else {
 		// Fit all points in the current octree
-		// points_storage_.resize(points.size());
+		points_storage_.resize(points.size());
 		points_.resize(points.size());
 		
 		// Copy points to storage and update pointers
 		for(size_t i = 0; i < points.size(); i++)
 		{
-			// points_storage_[i] = *points[i];  // Copy the point that the pointer points to
-			// points_[i] = &points_storage_[i];  // Store pointer to our copied point
-			points_[i] = points[i];  // Store pointer to the point
+			points_storage_[i] = *points[i];  // Copy the point that the pointer points to
+			points_[i] = &points_storage_[i];  // Store pointer to our copied point
 		}
 	}
 }
