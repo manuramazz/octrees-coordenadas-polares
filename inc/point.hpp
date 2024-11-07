@@ -110,6 +110,13 @@ class Point
 		return { x_ + v.getX() * distance, y_ + v.getY() * distance, z_ };
 	}
 
+	[[nodiscard]] inline double getMaxCoordinate() const {
+		return std::max(x_, std::max(y_, z_));
+	}
+	[[nodiscard]] inline double getMinCoordinate() const {
+		return std::min(x_, std::min(y_, z_));
+	}
+
 	// Vector Methods
 	/* Gets the perpendicular vector (XY plane) */
 	[[nodiscard]] inline Vector perpenVector() const { return { -y_, x_, z_ }; }

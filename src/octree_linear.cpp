@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <bits/types.h>
+#include <fstream>
 
 std::vector<std::pair<Point, size_t>> LinearOctree::computeNumPoints() const
 /**
@@ -19,7 +20,13 @@ std::vector<std::pair<Point, size_t>> LinearOctree::computeNumPoints() const
  * @param numPoints
  */
 {
-	return std::vector<std::pair<Point, size_t>>{};
+	std::vector<std::pair<Point, size_t>> result;
+	int total = 0;
+	for (auto& [code, node] : nodes) {
+		result.push_back({getNodeCenter(code), node->points.size()});
+	}
+
+	return result;
 }
 
 std::vector<std::pair<Point, double>> LinearOctree::computeDensities() const
@@ -27,7 +34,13 @@ std::vector<std::pair<Point, double>> LinearOctree::computeDensities() const
  * Returns a vector containing the densities of all populated octrees
  */
 {
-	return std::vector<std::pair<Point, double>>{};
+	std::vector<std::pair<Point, double>> result;
+	int total = 0;
+	for (auto& [code, node] : nodes) {
+		result.push_back({getNodeCenter(code), getDensity(code)});
+	}
+
+	return result;
 }
 
 void LinearOctree::writeDensities(const std::filesystem::path& path) const
@@ -36,7 +49,14 @@ void LinearOctree::writeDensities(const std::filesystem::path& path) const
  * @param path
  */
 {
+	const auto densities = computeDensities();
 
+	std::ofstream f(path);
+	f << std::fixed << std::setprecision(2);
+	for (const auto& v : densities)
+	{
+		f << v.first.getX() << " " << v.first.getY() << v.first.getZ() << " " << v.second << "\n";
+	}
 }
 
 void LinearOctree::writeNumPoints(const std::filesystem::path& path) const
@@ -45,16 +65,45 @@ void LinearOctree::writeNumPoints(const std::filesystem::path& path) const
  * @param path
  */
 {
+	const auto numPoints = computeNumPoints();
 
+	std::ofstream f(path);
+	f << std::fixed << std::setprecision(2);
+	for (const auto& v : numPoints)
+	{
+		f << v.first.getX() << " " << v.first.getY() << v.first.getZ() << " " << v.second << "\n";
+	}
 }
 
-/* // FIXME: This function may overlap with some parts of extractPoint[s]
-const LinearOctree* LinearOctree::findOctant(const Lpoint* p) const
+const LinearOctreeNode* LinearOctree::findNode(const Lpoint* p) const
 /**
  * @brief Find the octant containing a given point.
  * @param p
  * @return
  */
+{
+	morton_t code = 0;
+	bool not_found_flag;
+	while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
+		not_found_flag = true;
+		for(uint8_t index = 0; index < 8; index++) {
+			morton_t childCode = getChildrenCode(code, index);
+			// If the node point is inside, go into the leaf
+			if(isInside(*p, childCode)) {
+				code = childCode;
+				not_found_flag = false;
+			}
+		}
+		if(not_found_flag)
+			break;
+	}
+	
+	if(not_found_flag || !isInside(*p, code)) {    
+		return nullptr;
+	} else {
+		return nodes.at(code);
+	}
+}
 
 
 std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
@@ -66,12 +115,40 @@ std::vector<Lpoint*> LinearOctree::KNN(const Point& p, const size_t k, const siz
  * @return
  */
 {
-	return std::vector<Lpoint*>{};
+	std::vector<Lpoint*>             knn{};
+	std::unordered_map<size_t, bool> wasAdded{};
+
+	double r = 1.0;
+
+	size_t nmax = std::min(k, maxNeighs);
+	const double rMax = radii.getMaxCoordinate(); // Use maximum radius as upper bound
+
+	while (knn.size() <= nmax && r <= rMax)
+	{
+		auto neighs = searchNeighbors<Kernel_t::sphere>(p, r);
+
+		if (knn.size() + neighs.size() > nmax)
+		{ // Add all points if there is room for them
+			std::sort(neighs.begin(), neighs.end(),
+			          [&p](Lpoint* a, Lpoint* b) { return a->distance3D(p) < b->distance3D(p); });
+		}
+
+		for (const auto& n : neighs)
+		{
+			if (!wasAdded[n->id()])
+			{
+				wasAdded[n->id()] = true;
+				knn.push_back(n); // Conditional inserting?
+			}
+		}
+		r *= 2;
+	}
+	return knn;
 }
 
 void LinearOctree::writeOctree(std::ofstream& f, size_t index) const
 {
-
+	
 }
 
 void LinearOctree::extractPoint(const Lpoint* p)
@@ -248,9 +325,8 @@ std::vector<Lpoint*> LinearOctree::kClosestCircleNeighbors(const Lpoint* p, cons
 	 * @return
 	 */
 {
-	/* TODO because we dont have radius_
 	double               rMin = SENSEPSILON * static_cast<double>(k);
-	const double         rMax = 2.0 * M_SQRT2 * radius_;
+	const double         rMax = radii.getMaxCoordinate(); // Use maximum radius as upper bound
 	std::vector<Lpoint*> closeNeighbors;
 	for (closeNeighbors = searchCircleNeighbors(p, rMin); closeNeighbors.size() < k && rMin < 2 * rMax; rMin *= 2)
 	{
@@ -272,8 +348,7 @@ std::vector<Lpoint*> LinearOctree::kClosestCircleNeighbors(const Lpoint* p, cons
 		}
 		closeNeighbors.erase(closeNeighbors.begin() + furthestIndex);
 	}
-	return closeNeighbors; */
-	return std::vector<Lpoint*>{};
+	return closeNeighbors;
 }
 
 std::vector<Lpoint*> LinearOctree::nCircleNeighbors(const Lpoint* p, const size_t n, float& radius, const float minRadius,

@@ -80,7 +80,7 @@ private:
     /*
      * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
      */
-    inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) {
+    inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) const {
         // TODO: it should be 2^depth and not have to add this case, investigate why it wasn't working
         if(depth == 0) {
             x = 0, y = 0, z = 0;
@@ -108,7 +108,7 @@ private:
         return (code << DEPTH_BITS) | depth;
     }
 
-    inline morton_t encodeMortonPoint(const Point& p, uint8_t depth) {
+    inline morton_t encodeMortonPoint(const Point& p, uint8_t depth) const {
         // Utility method combining the two above
         coords_t x, y, z;
         getAnchorCoords(p, depth, x, y, z);
@@ -183,7 +183,7 @@ private:
     /**
      * Utility methods for getting geometric information (center, radius, inside check) from a morton code
      */
-    inline Point getNodeCenter(morton_t code) {
+    inline Point getNodeCenter(morton_t code) const {
         // Returns the physical (approximate) physical center of the node
         coords_t x, y, z;
         uint8_t depth = getDepth(code);
@@ -197,7 +197,7 @@ private:
         return Point(x_d, y_d, z_d);
     }
 
-    inline Vector getNodeRadii(morton_t code) {
+    inline Vector getNodeRadii(morton_t code) const {
         // Returns the vector of (approximate) physical radii of the node
         uint8_t depth = getDepth(code);
         return Vector(radii.getX() * (1.0f / (1 << depth)), 
@@ -206,7 +206,7 @@ private:
     }
 
 
-    void printNodeGeometry(morton_t code) {
+    void printNodeGeometry(morton_t code) const {
         Box bbox = Box(getNodeCenter(code), getNodeRadii(code));
         std::cout << "Node: ";
         printMortonCode(code, true);
@@ -216,7 +216,7 @@ private:
     }
 
 
-    inline bool isInside(Point &p, morton_t code) {
+    inline bool isInside(const Lpoint &p, morton_t code) const {
         // To check if a node is inside a given code, we compute its morton code at the depth of the node
         // and check whether it is the same
         // The "physical" approach of getting the node center and radii and computing the box would not be
@@ -270,13 +270,17 @@ public:
 
     // TODO: getters of center, radii, bbox, etc.
 
-    [[nodiscard]] inline double getDensity() const
+    [[nodiscard]] inline double getDensity(morton_t code) const
 	/*
     * @brief Computes the point density of the given Octree as nPoints / Volume
     */
 	{
-		// TODO
-        return 0.0f;
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return 0.0f;
+        }
+		auto radii = getNodeRadii(code);
+        return it->second->points.size() / (radii.getX() * radii.getY() * radii.getZ());
 	}
 
     void writeDensities(const std::filesystem::path& path) const;
@@ -700,7 +704,7 @@ public:
         std::cout << "Searching all the points in the octree... " << std::endl;
         tw.start();
         for(int i = 0; i<points.size(); i++) {
-            Point p = points[i];
+            const Lpoint p = points[i];
             morton_t code = 0;
             bool not_found_flag;
             while(!isLeaf(code) && getDepth(code) <= MAX_DEPTH) {
