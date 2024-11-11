@@ -190,24 +190,20 @@ private:
      */
     inline Point getNodeCenter(morton_t code) const {
         // Returns the physical (approximate) physical center of the node
-        coords_t x, y, z;
-        uint8_t depth = getDepth(code);
-        decodeMorton(code, x, y, z);
-        double x_d, y_d, z_d;
-        Vector nodeRadii = getNodeRadii(code);
-        Point lowCorner = (center - radii) + nodeRadii;
-        x_d = x * nodeRadii.getX() * 2 + lowCorner.getX();
-        y_d = y * nodeRadii.getY() * 2 + lowCorner.getY();
-        z_d = z * nodeRadii.getZ() * 2 + lowCorner.getZ();
-        return Point(x_d, y_d, z_d);
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return Point(0.0, 0.0, 0.0);
+        }
+        return it->second->getCenter();
     }
 
     inline Vector getNodeRadii(morton_t code) const {
-        // Returns the vector of (approximate) physical radii of the node
-        uint8_t depth = getDepth(code);
-        return Vector(radii.getX() * (1.0f / (1 << depth)), 
-                        radii.getY()* (1.0f / (1 << depth)), 
-                        radii.getZ()* (1.0f / (1 << depth)));
+        // Returns the physical (approximate) physical center of the node
+        auto it = nodes.find(code);
+        if(it == nodes.end()) {
+            return Point(0.0, 0.0, 0.0);
+        }
+        return it->second->getRadii();
     }
 
 
@@ -243,7 +239,9 @@ private:
         
         // Add good nodes to the octree, reject and put into subdivision stack the others
         for (auto& [code, binPoints] : bins) {
-            auto node = new LinearOctreeNode(binPoints, code, depth);
+            coords_t x, y, z;
+            decodeMorton(code, x, y, z);
+            auto node = new LinearOctreeNode(binPoints, code, depth, x, y, z, center, radii);
             // Insert into octree map (we also keep internal nodes, 
             // though their vectors of points will be cleared in case we subdivide)
             nodes[code] = node;
@@ -336,7 +334,7 @@ public:
         
         // Add all points to the root node and add to subdivision stack
         std::stack<LinearOctreeNode*> subdivision_stack;
-        auto node = new LinearOctreeNode(points, 0, 0);
+        auto node = new LinearOctreeNode(points, 0, 0, 0, 0, 0, center, radii);
         nodes[0] = node;
 
         if(points.size() > MAX_POINTS){
@@ -437,15 +435,17 @@ public:
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
 	{
+        //size_t visited = 0;
 		std::vector<Lpoint*> ptsInside;
-		std::stack<morton_t> toVisit;
+		morton_t stack[128];
+        uint8_t stack_index = 0;
         if(!isNode(root)) // Checks if the root is an actual node in the tree
             return ptsInside;
-		toVisit.push(root); // Root of the tree
+        stack[stack_index++] = root;
 
-		while (!toVisit.empty()) {
-            const morton_t code = toVisit.top();
-			toVisit.pop();
+		while (stack_index > 0) {
+            const morton_t code = stack[--stack_index];
+            //visited++;
 			if (isLeaf(code)) {
 				for (Lpoint* point_ptr : nodes.at(code)->points) {
                     // Check the point
@@ -457,11 +457,13 @@ public:
                 for(size_t index = 0; index < OCTANTS_PER_NODE; index++) {
                     morton_t childCode = getChildrenCode(code, index);
                     if(isNode(childCode) && k.boxOverlap(getNodeCenter(childCode), getNodeRadii(childCode))){
-                        toVisit.push(childCode);
+                        assert(stack_index < 128);
+                        stack[stack_index++] = childCode;
                     }
                 }
 			}
 		}
+        //std::cout << "visited: " << visited << std::endl;
 		return ptsInside;
 	}
 
@@ -761,5 +763,7 @@ public:
         //     total += node->points.size();
         // }
         // std::cout << "Points after: " << total << " out of " << points.size() << " points\n";
+
     }
+    friend class LinearOctreeNode;
 };

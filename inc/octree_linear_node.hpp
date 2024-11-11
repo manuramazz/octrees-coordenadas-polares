@@ -13,9 +13,31 @@ class LinearOctreeNode {
     private:
         std::vector<Lpoint*> points;
         morton_t code;
-
+        double center[3];
+        double radii[3];
     public:
-        LinearOctreeNode(std::vector<Lpoint*> p, morton_t c, uint8_t d): points(p), code(c) {};
+        LinearOctreeNode(std::vector<Lpoint*> p, morton_t c, uint8_t depth, coords_t x, coords_t y, coords_t z,
+                        Point rootCenter, Vector rootRadii): points(p), code(c) {
+            // Returns the physical (approximate) physical center of the node
+            radii[0] = rootRadii.getX() * (1.0f / (1 << depth));
+            radii[1] = rootRadii.getY() * (1.0f / (1 << depth));
+            radii[2] = rootRadii.getZ() * (1.0f / (1 << depth));
+            Point nodeRadii = Point(radii[0], radii[1], radii[2]);
+            Point lowCorner = (rootCenter - rootRadii) + nodeRadii;
+            center[0] = x * nodeRadii.getX() * 2 + lowCorner.getX();
+            center[1] = y * nodeRadii.getY() * 2 + lowCorner.getY();
+            center[2] = z * nodeRadii.getZ() * 2 + lowCorner.getZ();
+        }
+
+        // Geometric information getters
+        inline Point getCenter() const {
+            return Point(center[0], center[1], center[2]);
+        }
+
+        inline Vector getRadii() const {
+            return Vector(radii[0], radii[1], radii[2]);
+        }
+
 
         // Comparators based on Morton code
         bool operator==(const LinearOctreeNode& other) const {

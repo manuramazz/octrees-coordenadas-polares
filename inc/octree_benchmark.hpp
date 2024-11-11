@@ -2,20 +2,66 @@
 #include "octree.hpp"
 #include "octree_linear.hpp"
 #include <random>
+#include "point.hpp"
 
 #pragma once 
 
 class OctreeBenchmark {
     private:
-        constexpr static size_t search_size = 1;
+        constexpr static size_t search_size = 10000;
         constexpr static float min_radius = 0.01;
-        constexpr static float max_radius = 100.0;
-
+        constexpr static float max_radius = 10.0;
+        
         std::vector<Lpoint> points;
         Octree* pOctree = nullptr;
         LinearOctree* lOctree = nullptr;
         std::mt19937 rng;
         
+        size_t searchPointIndexes[search_size];
+        float searchRadii[search_size];
+        std::vector<Lpoint*> searchResultsPointer[search_size];
+        std::vector<Lpoint*> searchResultsLinear[search_size];
+
+        void generateSearchSet() {
+            rng.seed(0);
+            std::uniform_int_distribution<size_t> indexDist(0, points.size()-1);
+            std::uniform_real_distribution<float> radiusDist(min_radius, max_radius);
+            for(int i = 0; i<search_size; i++) {
+                searchPointIndexes[i] = indexDist(rng);
+                searchRadii[i] = radiusDist(rng);
+                searchResultsPointer[i].clear();
+                searchResultsLinear[i].clear();
+            }
+        }
+
+        bool checkSearchResults() {
+            bool correct = true;
+            for(int i = 0; i<search_size; i++) {
+                auto point = searchResultsPointer[i];
+                auto lin = searchResultsLinear[i];
+                if(point.size() != lin.size()) {
+                    std::cout << "Wrong search result size in set " << i << 
+                    "\n Pointer = " << point.size() << " Linear: " << lin.size() << std::endl;
+                    correct = false;
+                } else {
+                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
+                        return p->id() < q->id();
+                    });
+                    sort(lin.begin(), lin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
+                        return p->id() < q->id();
+                    });
+                    for(int j = 0; j<point.size(); j++){
+                        if(point[j]->id() != lin[j]->id()) {
+                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
+                            "\n Pointer = " << point[j]->id() << " Linear: " << lin[j]->id() << std::endl;
+                            correct = false;
+                        }
+                    }
+                }
+            }
+            return correct;
+        }
+
         void octreePointerBuild() {
             // Pointer based octree
             if(pOctree != nullptr)
@@ -30,20 +76,14 @@ class OctreeBenchmark {
         }
 
         void octreePointerSearchNeighSphere() {
-            std::uniform_int_distribution<size_t> dist_indexes(0, search_size- 1);
-            std::uniform_real_distribution<float> dist_radius(min_radius, max_radius);
-
             for(int i = 0; i<search_size; i++) {
-                auto neigh_points = pOctree->searchSphereNeighbors(points[dist_indexes(rng)], dist_radius(rng));
+                searchResultsPointer[i] = pOctree->searchSphereNeighbors(points[searchPointIndexes[i]], searchRadii[i]);
             }
         }
 
         void octreeLinearSearchNeighSphere() {
-            std::uniform_int_distribution<size_t> dist_indexes(0, search_size- 1);
-            std::uniform_real_distribution<float> dist_radius(min_radius, max_radius);
-
             for(int i = 0; i<search_size; i++) {
-                auto neigh_points = lOctree->searchSphereNeighbors(points[dist_indexes(rng)], dist_radius(rng));
+                searchResultsLinear[i] = lOctree->searchSphereNeighbors(points[searchPointIndexes[i]], searchRadii[i]);
             }
         }
         
@@ -59,10 +99,13 @@ class OctreeBenchmark {
             benchmarking::benchmark("Linear octree build", repeats, [this]() { octreeLinearBuild(); });
         }   
 
-        void benchmarkSearchNeighSphere(size_t repeats) {
+        void benchmarkSearchNeighSphere(size_t repeats, bool checkResults = false) {
+            generateSearchSet();
+            std::cout << "Generated search set containing " << search_size << " operations" << std::endl;
             benchmarking::benchmark("Pointer octree neighbor search with spheres", repeats, [this]() { octreePointerSearchNeighSphere(); });
             benchmarking::benchmark("Linear octree neighbor search with spheres", repeats, [this]() { octreeLinearSearchNeighSphere(); });
+            if(checkResults && checkSearchResults())
+                std::cout << "All search methods yield the same results!" << std::endl;
+            
         }
-
-
 };
