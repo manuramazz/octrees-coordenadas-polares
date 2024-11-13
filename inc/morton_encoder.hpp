@@ -105,5 +105,33 @@ namespace MortonEncoder {
         return 1ul << (3u * shifts);
     }
 
+    
+    constexpr morton_t encodePlaceholderBit(morton_t code, int prefixLength) {
+        int nShifts = 3 * MAX_DEPTH - prefixLength;
+        morton_t ret = code >> nShifts;
+        morton_t placeHolderMask = 1UL << prefixLength;
 
+        return placeHolderMask | ret;
+    }
+
+    constexpr uint32_t decodePrefixLength(morton_t code) {
+        return 8 * sizeof(morton_t) - 1 - countLeadingZeros(code);
+    }
+
+    constexpr morton_t decodePlaceholderBit(morton_t code) {
+        int prefixLength        = decodePrefixLength(code);
+        morton_t placeHolderMask = 1UL << prefixLength;
+        morton_t ret             = code ^ placeHolderMask;
+
+        return ret << (3 * MAX_DEPTH - prefixLength);
+    }
+
+
+    constexpr int32_t commonPrefix(morton_t key1, morton_t key2) {
+        return int32_t(countLeadingZeros(key1 ^ key2)) - UNUSED_BITS;
+    }
+
+    constexpr unsigned octalDigit(morton_t code, uint32_t position) {
+        return (code >> (3u * (MAX_DEPTH - position))) & 7u;
+    }
 };

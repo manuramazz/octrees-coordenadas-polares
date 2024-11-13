@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
   tw.stop();
   std::cout << "Time to build linear octree: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
-
+  
   // OctreeBenchmark ob(points);
   // ob.benchmarkSearchNeighSphere(10, true);
 
