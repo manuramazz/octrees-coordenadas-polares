@@ -9,7 +9,7 @@ namespace MortonEncoder {
     // 21 octal 7s (i.e. all bits set to 1 except MSB)
     constexpr unsigned MAX_DEPTH = 21;
     constexpr double EPS = 1.0f / (1 << MAX_DEPTH);
-    constexpr morton_t LAST_CODE = 0'777777777777777777777;
+    constexpr morton_t LAST_CODE = 0x8000000000000000;
     constexpr uint32_t UNUSED_BITS = 1;
 
     inline void getAnchorCoords(const Point &center, const Vector &radii, const Point& p, coords_t &x, coords_t &y, coords_t &z) {
@@ -62,11 +62,11 @@ namespace MortonEncoder {
         libmorton::morton3D_64_decode(code, x, y, z);
     }
 
-    constexpr uint32_t countLeadingZeros(uint32_t x)
+    constexpr uint32_t countLeadingZeros(uint64_t x)
     {
         #if defined(__GNUC__) || defined(__clang__)
-            if (x == 0) return 8 * sizeof(uint32_t);
-            return __builtin_ctzl(x);
+            if (x == 0) return 8 * sizeof(uint64_t);
+            return __builtin_clzll(x);
         #else
             uint32_t depth = 0;
             for (; x != 1; x >>= 3, depth++);
@@ -74,13 +74,21 @@ namespace MortonEncoder {
         #endif
     }
 
+    constexpr bool isPowerOf8(morton_t n) {
+        morton_t lz = countLeadingZeros(n - 1) - UNUSED_BITS;
+        return lz % 3 == 0 && !(n & (n - 1));
+    }
+
     // Get the level in the octree of the given morton code
-    inline uint32_t getLevel(morton_t code) {
-        return (countLeadingZeros(code - 1) - UNUSED_BITS) / 3;
+    inline uint32_t getLevel(morton_t range) {
+        assert(isPowerOf8(range));
+        if(range == LAST_CODE)
+            return 0U;
+        return (countLeadingZeros(range - 1) - UNUSED_BITS) / 3;
     }
 
     // Get the sibling ID of the code at a given level
-     constexpr uint32_t getSiblingId(morton_t code, uint32_t level) {
+    constexpr uint32_t getSiblingId(morton_t code, uint32_t level) {
         // Shift 3*(21-level) to get the 3 bits corresponding to the level
         return (code >> (3u * (MAX_DEPTH - level))) & 7u;
     }   

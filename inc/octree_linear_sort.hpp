@@ -52,9 +52,9 @@ private:
     // Comput the array of rebalancing decisions (g1)
     bool rebalanceDecision(std::vector<uint32_t> &nodeOps) {
         bool converged = true;
-        for(int i = 0; i<nodeOps.size(); i++) {
-            uint32_t decision = calculateNodeOp(i);
-            if(!decision != 1) converged = false;
+        for(int i = 0; i<octree.size()-1; i++) {
+            nodeOps[i] = calculateNodeOp(i);
+            if(nodeOps[i] != 1) converged = false;
         }
         return converged;
     } 
@@ -87,22 +87,32 @@ private:
     }
 
     // Get the sibling ID and level of the node in the octree
-    inline std::pair<uint32_t, uint32_t> siblingAndLevel(uint32_t index) {
+    inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
         morton_t node = octree[index];
         morton_t range = octree[index+1] - node;
-
         uint32_t level = MortonEncoder::getLevel(range);
         if(level == 0) {
             return {-1, level};
         }
 
         uint32_t siblingId = MortonEncoder::getSiblingId(node, level);
+
         // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
         // to the code parent and the next parent is the range spanned by two consecutive codes at that level
-        bool siblingsOnTree = (octree[index - siblingId + 8] - octree[index - siblingId]) == MortonEncoder::nodeRange(level - 1);
+        bool siblingsOnTree = octree[index - siblingId + 8] == (octree[index - siblingId] + MortonEncoder::nodeRange(level - 1));
         if(!siblingsOnTree) siblingId = -1;
 
         return {siblingId, level};
+    }
+
+    
+    static void printMortonCode(morton_t code) {
+        // Print the bits in groups of 3 to represent each level
+        std::cout << std::bitset<1>(code >> 63) << " ";
+        for (int i = 62; i >= 0; i -= 3) {
+            std::cout << std::bitset<3>((code >> (i - 2)) & 0b111) << " ";
+        }
+        std::cout << std::endl;
     }
 
     // Build the new tree using the rebalance decision array
@@ -113,11 +123,10 @@ private:
         exclusiveScan(nodeOps.data(), n+1);
 
         newTree.resize(nodeOps[n] + 1);
+        newTree.back() = octree.back();
         for (uint32_t i = 0; i < n; ++i) {
             processNode(i, nodeOps, newTree);
         }
-
-        newTree.back() = octree.back();
     }
 
     // Construct new octree value for the given index
@@ -132,19 +141,54 @@ private:
 
         if(opCode == 1) {
             // do nothing, just copy node into new position
-            newTree[index] = node;
+            newTree[newNodeIndex] = node;
+            // assert(MortonEncoder::isPowerOf8(newTree[newNodeIndex + 1] - newTree[newNodeIndex]));
         } else if(opCode == 8) {
             // Split the node into 8
             for(int sibling = 0; sibling < OCTANTS_PER_NODE; sibling++) {
                 newTree[newNodeIndex + sibling] = node + sibling * MortonEncoder::nodeRange(level + 1);
             }
+            // assert(MortonEncoder::isPowerOf8(newTree[newNodeIndex + 8] - newTree[newNodeIndex + 7]));
         } else {
             // TODO: higher order splits
         }
     }
 
+    // Count number of particles in each octree node
     void computeNodeCounts() {
-        
+        uint32_t n = octree.size() - 1;
+        uint32_t codes_size = codes.size();
+        uint32_t firstNode = 0;
+        uint32_t lastNode = n;
+
+        if(codes.size() > 0) {
+            firstNode = std::upper_bound(octree.begin(), octree.end(), codes[0]) - octree.begin() - 1;
+            lastNode = std::upper_bound(octree.begin(), octree.end(), codes[codes_size-1]) - octree.begin();
+            assert(firstNode <= lastNode);
+        } else {
+            firstNode = n, lastNode = n;
+        }
+
+        // Fill non-populated parts of the octree with zeros
+        for(uint32_t i = 0; i<firstNode; i++)
+            counts[i] = 0;
+        for(uint32_t i = lastNode; i<lastNode; i++)
+            counts[i] = 0;
+
+        // TODO: count guessing, parallelizing
+        size_t nNonZeroNodes = lastNode - firstNode;
+        exclusiveScan(counts.data() + firstNode, nNonZeroNodes);
+
+        for(uint32_t i = 0; i<nNonZeroNodes; i++) {
+            counts[i + firstNode] = calculateNodeCount(octree[i+firstNode], octree[i+firstNode+1]);
+        }
+    }
+    unsigned calculateNodeCount(morton_t keyStart, morton_t keyEnd) {
+        auto rangeStart = std::lower_bound(codes.begin(), codes.end(), keyStart);
+        auto rangeEnd   = std::lower_bound(codes.begin(), codes.end(), keyEnd);
+        size_t count    = rangeEnd - rangeStart;
+        // TODO: should we use maxCount??
+        return count;
     }
 
     template<class T>
@@ -185,15 +229,15 @@ public:
     }
 
     bool updateOctree() {
-        std::vector<uint32_t> nodeOps(codes.size());
+        std::vector<uint32_t> nodeOps(octree.size());
         bool converged = rebalanceDecision(nodeOps);
-
+        
         std::vector<morton_t> newTree;
-
         rebalanceTree(newTree, nodeOps);
+        counts.resize(newTree.size()-1);
         swap(octree, newTree);
 
-        counts.resize(newTree.size()-1);
         computeNodeCounts();
+        return converged;
     }
 };

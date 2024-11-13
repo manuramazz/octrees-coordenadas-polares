@@ -64,35 +64,27 @@ int main(int argc, char *argv[]) {
   // std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
   // gOctree.writeOctree(gOctreeStream, 0);
 
-  std::cout << "Building linear octree..." << std::endl;
-  tw.start();
-  LinearOctree lOctree(points);
-  tw.stop();
-  std::cout << "Time to build linear octree: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
+  // std::cout << "Building linear octree..." << std::endl;
+  // tw.start();
+  // LinearOctree lOctree(points);
+  // tw.stop();
+  // std::cout << "Time to build linear octree: " << tw.getElapsedDecimalSeconds()
+  //           << " seconds\n";
   // fs::path linearOutFile = mainOptions.outputDirName / "linear.txt";
   // std::ofstream linearOutStream(linearOutFile);
-
-  for(int i = 1234; i<1234+5; i++) {
-    std::cout << points[i].id() << std::endl;
-  } 
 
   tw.start();
   // We sort the points by morton order here!
   std::vector<morton_t> codes = MortonEncoder::sortPoints(points);
   tw.stop();
-  for(int i = 1234; i < 1234+5; i++) {
-    std::cout << points[i].id() << std::endl;
-  } 
+
   std::cout << "Time to sort points using morton codes: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
-  // tw.start();
-  // LinearOctreeSort lsOctree(codes);
-  // tw.stop();
-  // std::cout << "Time to build linear octree: " << tw.getElapsedDecimalSeconds()
-  //           << " seconds\n";
-
-
+  tw.start();
+  LinearOctreeSort lsOctree(codes);
+  tw.stop();
+  std::cout << "Time to build linear octree: " << tw.getElapsedDecimalSeconds()
+            << " seconds\n";
 
   // OctreeBenchmark ob(points);
   // ob.benchmarkSearchNeighSphere(10, true);
