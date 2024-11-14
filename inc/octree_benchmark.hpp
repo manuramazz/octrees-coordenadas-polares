@@ -3,6 +3,7 @@
 #include "octree_linear.hpp"
 #include <random>
 #include "point.hpp"
+#include <omp.h>
 
 #pragma once 
 
@@ -26,6 +27,7 @@ class OctreeBenchmark {
             rng.seed(0);
             std::uniform_int_distribution<size_t> indexDist(0, points.size()-1);
             std::uniform_real_distribution<float> radiusDist(min_radius, max_radius);
+#pragma omp parallel for
             for(int i = 0; i<search_size; i++) {
                 searchPointIndexes[i] = indexDist(rng);
                 searchRadii[i] = radiusDist(rng);
@@ -76,12 +78,14 @@ class OctreeBenchmark {
         }
 
         void octreePointerSearchNeighSphere() {
+#pragma omp parallel for
             for(int i = 0; i<search_size; i++) {
                 searchResultsPointer[i] = pOctree->searchSphereNeighbors(points[searchPointIndexes[i]], searchRadii[i]);
             }
         }
 
         void octreeLinearSearchNeighSphere() {
+#pragma omp parallel for
             for(int i = 0; i<search_size; i++) {
                 searchResultsLinear[i] = lOctree->searchSphereNeighbors(points[searchPointIndexes[i]], searchRadii[i]);
             }

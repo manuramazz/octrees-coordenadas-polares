@@ -19,6 +19,7 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
 #include "morton_encoder.hpp"
+#include "Box.hpp"
 
 using morton_t = uint_fast64_t;
 using coords_t = uint_fast32_t;
@@ -68,8 +69,13 @@ private:
     std::vector<uint32_t> internalToLeaf;
     std::vector<uint32_t> leafToInternal;
 
-    // The sorted vector of codes of the points
-    std::vector<morton_t> &codes;
+    // References to sorted morton codes of the points and the morton-code-sorted array of points
+    const std::vector<morton_t> &codes;
+    MortonEncoder &morton;
+
+    // The geometric information of the points bounding box
+    std::vector<Point> centers;
+    std::vector<Vector> radii;
 
     // Comput the array of rebalancing decisions (g1)
     bool rebalanceDecision(std::vector<uint32_t> &nodeOps) {
@@ -303,12 +309,35 @@ private:
 public:
     LinearOctreeSort() = default;
     
-    explicit LinearOctreeSort(std::vector<morton_t> &codes): codes(codes) {
+    explicit LinearOctreeSort(std::vector<morton_t> &codes, MortonEncoder &morton): codes(codes), morton(morton) {
+        std::cout << "Linear octree build summary:\n";
+        double total_time;
+        TimeWatcher tw;
+        tw.start();
         buildOctreeLeaves();
-
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to build the octree leaves: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+        
+        tw.start();
         resize();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to allocate space for internal variables: " << tw.getElapsedDecimalSeconds() << " seconds\n";
 
+        tw.start();
         buildOctreeInternal();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to build internal part of the octree and link it: " << tw.getElapsedDecimalSeconds() << " seconds\n";
+
+        tw.start();
+        computeGeometry();
+        tw.stop();
+        total_time += tw.getElapsedDecimalSeconds();
+        std::cout << "  Time to compute octree geometry (centers and radii): " << tw.getElapsedDecimalSeconds() << " seconds\n";
+        
+        std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
     }
 
     void buildOctreeLeaves() {
@@ -348,6 +377,8 @@ public:
         parents.resize((nTotal-1) / 8);
         internalToLeaf.resize(nTotal);
         leafToInternal.resize(nTotal);
+        centers.resize(nTotal);
+        radii.resize(nTotal);
     }
 
     void buildOctreeInternal() {
@@ -381,6 +412,16 @@ public:
         linkTree();
     }
 
+    // Computes the node centers and radii
+    void computeGeometry() {
+        for(uint32_t i = 0; i<prefixes.size(); i++) {
+            morton_t prefix = prefixes[i];
+            morton_t startKey = MortonEncoder::decodePlaceholderBit(prefix);
+            uint32_t level = MortonEncoder::decodePrefixLength(prefix) / 3;
+            std::tie(centers[i], radii[i]) = morton.getCenterAndRadii(startKey, level);
+        }
+    }
+
     void printArray(std::vector<uint32_t> &arr) {
         for(int i = 0; i<arr.size();i++) {
             std::cout << i << " -> " << arr[i] << std::endl;
@@ -391,4 +432,70 @@ public:
             std::cout << i << " -> "; printMortonCode(arr[i]);
         }
     }
+
+    // A generic traversal along the tree
+    template<class C, class A>
+    void singleTraversal(C&& continuationCriterion, A&& endpointAction) {
+        bool descend = continuationCriterion(0);
+        if (!descend) return;
+
+        if (offsets[0] == 0) {
+            // root node is already the endpoint
+            endpointAction(0);
+            return;
+        }
+
+        uint32_t stack[128];
+        stack[0] = 0;
+
+        uint32_t stackPos = 1;
+        uint32_t node = 0; // start at the root
+
+        do {
+            for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
+                uint32_t child = offsets[node] + octant;
+                bool descend = continuationCriterion(child);
+                if (descend) {
+                    if (offsets[child] == 0) {
+                        // endpoint reached with child is a leaf node
+                        endpointAction(child);
+                    } else {
+                        assert(stackPos < 128);
+                        stack[stackPos++] = child; // push
+                    }
+                }
+            }
+            node = stack[--stackPos];
+
+        } while (node != 0); // the root can only be obtained when the tree has been fully traversed
+    }
+
+    template<typename Kernel, typename Function>
+    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
+    /**
+     * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
+     * @param k specific kernel that contains the data of the region (center and radius)
+     * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
+     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * @param root The morton code for the node to start (usually the tree root which is 0)
+     * @return Points inside the given kernel type. Actually the same as ptsInside.
+     */
+	{
+        std::vector<Lpoint*> ptsInside;
+
+        // continuation criteria
+        auto intersectsBox = [k](uint32_t nodeIndex) {
+            
+        };
+
+        // endpoint action
+        auto findAndInsertPoints = [k, condition, ptsInside](uint32_t nodeIndex) {
+
+        };
+
+        singleTraversal(intersectsBox, findAndInsertPoints);
+
+		return ptsInside;
+	}
+
 };

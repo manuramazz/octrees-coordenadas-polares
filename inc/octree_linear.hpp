@@ -447,12 +447,12 @@ public:
             const morton_t code = stack[--stack_index];
             //visited++;
 			if (isLeaf(code)) {
-				for (Lpoint* point_ptr : nodes.at(code)->points) {
+                for (Lpoint* point_ptr : nodes.at(code)->points) {
                     // Check the point
-					if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr)) {
-						ptsInside.emplace_back(point_ptr); // add the point to the result list
+                    if (k.isInside(*point_ptr) && k.center().id() != point_ptr->id() && condition(*point_ptr)) {
+                        ptsInside.emplace_back(point_ptr); // add the point to the result list
                     }
-				}
+                }
 			} else {
                 for(size_t index = 0; index < OCTANTS_PER_NODE; index++) {
                     morton_t childCode = getChildrenCode(code, index);
