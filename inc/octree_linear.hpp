@@ -405,8 +405,9 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Lpoint> &points): points(points) {
-        std::cout << "Linear octree build summary:\n";
+    explicit LinearOctree(std::vector<Lpoint> &points, bool printPerformanceMeasures = false): points(points) {
+        if(printPerformanceMeasures)
+            std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;
         TimeWatcher tw;
         auto buildStep = [&](auto &&step, const std::string action) {
@@ -414,7 +415,8 @@ public:
             step();
             tw.stop();
             total_time += tw.getElapsedDecimalSeconds();
-            std::cout << "  Time to " << action << ": " << tw.getElapsedDecimalSeconds() << " seconds\n";
+            if(printPerformanceMeasures)
+                std::cout << "  Time to " << action << ": " << tw.getElapsedDecimalSeconds() << " seconds\n";
         };
 
         buildStep([&] { setupBbox(); }, "find bounding box");
@@ -423,8 +425,8 @@ public:
         buildStep([&] { resize(); }, "allocate space for internal variables");
         buildStep([&] { buildOctreeInternal(); }, "build internal part of the octree and link it");
         buildStep([&] { computeGeometry(); }, "compute octree geometry");
-
-        std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
+        if(printPerformanceMeasures)
+            std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
     }
 
     /**

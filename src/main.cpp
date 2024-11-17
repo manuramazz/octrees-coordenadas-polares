@@ -54,18 +54,19 @@ int main(int argc, char *argv[]) {
             << " seconds\n";
 
   // Global Octree Creation
-  std::cout << "Building global octree..." << std::endl;
-  tw.start();
-  Octree gOctree(points);
-  tw.stop();
-  std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
-  gOctree.writeOctree(gOctreeStream, 0);
+  // std::cout << "Building global octree..." << std::endl;
+  // tw.start();
+  // Octree gOctree(points);
+  // tw.stop();
+  // std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
+  //           << " seconds\n";
+  // std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
+  // gOctree.writeOctree(gOctreeStream, 0);
 
-  std::vector<Lpoint> lsOctreePoints(points);
+  // Copy of the points for the linear octree
+  std::vector<Lpoint> lOctreePoints(points);
   
-  OctreeBenchmark ob(points, lsOctreePoints);
+  OctreeBenchmark ob(points, lOctreePoints, 1000);
   
   ob.benchmarkSearchNeigh<Kernel_t::sphere>();
   ob.benchmarkSearchNeigh<Kernel_t::circle>();

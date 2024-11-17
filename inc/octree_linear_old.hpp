@@ -85,7 +85,6 @@ private:
      * Method to convert a point to its anchor, this operation approximates its coordinates and so it is not reversible
      */
     inline void getAnchorCoords(const Point& p, uint8_t depth, coords_t &x, coords_t &y, coords_t &z) const {
-        // TODO: it should be 2^depth and not have to add this case, investigate why it wasn't working
         if(depth == 0) {
             x = 0, y = 0, z = 0;
             return;
@@ -132,7 +131,6 @@ private:
 
     /**
      * Utility methods for working with Morton codes
-     * TODO: maybe remove the assertions here and do some better error handling
      */
     static inline uint8_t getDepth(morton_t code) {
         return (uint8_t) (code & DEPTH_MASK);
@@ -273,8 +271,6 @@ public:
         buildOctree(points);
     }
 
-    // TODO: getters of center, radii, bbox, etc.
-
     [[nodiscard]] inline double getDensity(morton_t code) const
 	/*
     * @brief Computes the point density of the given Octree as nPoints / Volume
@@ -294,7 +290,6 @@ public:
     // Called this findNode instead of findOctant but they do the same
     [[nodiscard]] const LinearOctreeOldNode* findNode(const Lpoint* p) const;
 
-    // TODO implement at cpp the ones that make sense for linear octrees
     [[nodiscard]] std::vector<std::pair<Point, double>> computeDensities() const;
 	[[nodiscard]] std::vector<std::pair<Point, size_t>> computeNumPoints() const;
     [[nodiscard]] bool isInside2D(const Point& p) const;
@@ -330,7 +325,7 @@ public:
     }
 
     void buildOctree(std::vector<Lpoint*>& points) {
-        // TODO: usually build process its different, points are sorted globally and then put into bins
+        // TODO: usually build process its different, points are sorted globally and then put into bins (this is done in the new Linear Octree impl.)
         // Maybe doing something similar but simpler than cornerstone paper https://dl.acm.org/doi/abs/10.1145/3592979.3593417
         // this is faster and more parallelizable in the future
         
@@ -417,7 +412,7 @@ public:
    * @return Points inside the given kernel type
    */
 	{
-		const auto kernel = kernelFactory<kernel>(p, radii);
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighbors(kernel, std::forward<Function&&>(condition));
 	}
 
@@ -427,7 +422,7 @@ public:
 	[[nodiscard]] std::vector<Lpoint*> KNN(const Point& p, size_t k, size_t maxNeighs = DEFAULT_KNN) const;
 
 	template<typename Kernel, typename Function>
-    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
+    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition) const
     /**
      * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
      * @param k specific kernel that contains the data of the region (center and radius)
@@ -441,9 +436,9 @@ public:
 		std::vector<Lpoint*> ptsInside;
 		morton_t stack[128];
         uint8_t stack_index = 0;
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
+        if(!isNode(0)) // Checks if the root is an actual node in the tree
             return ptsInside;
-        stack[stack_index++] = root;
+        stack[stack_index++] = 0;
 
 		while (stack_index > 0) {
             const morton_t code = stack[--stack_index];
@@ -532,15 +527,15 @@ public:
 		return numNeighbors(kernel);
 	}
     
-    template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k, morton_t root = 0) const
+    template<typename Kernel>
+	[[nodiscard]] size_t numNeighbors(const Kernel& k) const
 	{
 		size_t ptsInside = 0;
 		std::stack<morton_t> toVisit;
 
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
+        if(!isNode(0)) // Checks if the root is an actual node in the tree
             return ptsInside;
-		toVisit.push(root); // Root of the tree
+		toVisit.push(0); // Root of the tree
 
 		while (!toVisit.empty()) {
             const morton_t code = toVisit.top();
@@ -558,7 +553,8 @@ public:
                 // If we are in an inner node, add all the child octants to the search list
                 for(int index = 0; index<8; index++) {
                     morton_t childCode = getChildrenCode(code, index);
-                    // TODO
+                    if(isNode(childCode))
+                        toVisit.push(childCode);
                 }
 			}
 		}
@@ -566,14 +562,14 @@ public:
 	}
 
     template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k, Function&& condition, morton_t root = 0) const
+	[[nodiscard]] size_t numNeighbors(const Kernel& k, Function&& condition) const
 	{
 		size_t ptsInside = 0;
 		std::stack<morton_t> toVisit;
 
-        if(!isNode(root)) // Checks if the root is an actual node in the tree
+        if(!isNode(0)) // Checks if the root is an actual node in the tree
             return ptsInside;
-		toVisit.push(root); // Root of the tree
+		toVisit.push(0); // Root of the tree
 
 		while (!toVisit.empty()) {
             const morton_t code = toVisit.top();
