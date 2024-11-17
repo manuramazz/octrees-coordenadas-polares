@@ -21,33 +21,43 @@ enum class Kernel_t // Different types of kernels to be used in the factory func
 	cube
 };
 
-template<Kernel_t kernel_type>
+constexpr const char* kernelToString(Kernel_t kernel) {
+    switch (kernel) {
+        case Kernel_t::circle: return "Circle";
+        case Kernel_t::sphere: return "Sphere";
+        case Kernel_t::square: return "Square";
+        case Kernel_t::cube: return "Cube";
+        default: return "Unknown";
+    }
+}
+
+template<Kernel_t kernel>
 inline auto kernelFactory_ptr(const Point& center, const double radius) -> std::unique_ptr<KernelAbstract>
 {
-	if constexpr (kernel_type == Kernel_t::circle) { return std::make_unique<KernelCircle>(center, radius); }
-	else if constexpr (kernel_type == Kernel_t::square) { return std::make_unique<KernelSquare>(center, radius); }
-	else if constexpr (kernel_type == Kernel_t::sphere) { return std::make_unique<KernelSphere>(center, radius); }
+	if constexpr (kernel == Kernel_t::circle) { return std::make_unique<KernelCircle>(center, radius); }
+	else if constexpr (kernel == Kernel_t::square) { return std::make_unique<KernelSquare>(center, radius); }
+	else if constexpr (kernel == Kernel_t::sphere) { return std::make_unique<KernelSphere>(center, radius); }
 	else /* if constexpr (kernel_type == Kernel_t::cube) */ { return std::make_unique<KernelCube>(center, radius); }
 }
 
-template<Kernel_t kernel_type>
+template<Kernel_t kernel>
 inline auto kernelFactory(const Point& center, const double radius)
 {
-	if constexpr (kernel_type == Kernel_t::circle) { return KernelCircle(center, radius); }
-	else if constexpr (kernel_type == Kernel_t::square) { return KernelSquare(center, radius); }
-	else if constexpr (kernel_type == Kernel_t::sphere) { return KernelSphere(center, radius); }
+	if constexpr (kernel == Kernel_t::circle) { return KernelCircle(center, radius); }
+	else if constexpr (kernel == Kernel_t::square) { return KernelSquare(center, radius); }
+	else if constexpr (kernel == Kernel_t::sphere) { return KernelSphere(center, radius); }
 	else /* if constexpr (kernel_type == Kernel_t::cube) */ { return KernelCube(center, radius); }
 }
 
-template<Kernel_t kernel_type>
+template<Kernel_t kernel>
 inline auto kernelFactory(const Point& center, const Vector& radii)
 {
 	// Check that kernel type can be used with given parameters
-	constexpr bool valid_kernel_type = (kernel_type == Kernel_t::square) || (kernel_type == Kernel_t::cube);
+	constexpr bool valid_kernel_type = (kernel == Kernel_t::square) || (kernel == Kernel_t::cube);
 	static_assert(valid_kernel_type, "Incorrect kernel type");
 
-	if constexpr (kernel_type == Kernel_t::square) { return KernelSquare(center, radii); }
-	else if constexpr (kernel_type == Kernel_t::cube) { return KernelCube(center, radii); }
+	if constexpr (kernel == Kernel_t::square) { return KernelSquare(center, radii); }
+	else if constexpr (kernel == Kernel_t::cube) { return KernelCube(center, radii); }
 }
 
 #endif /* end of include guard: KERNELFACTORY_HPP */

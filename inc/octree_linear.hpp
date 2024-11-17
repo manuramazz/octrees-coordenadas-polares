@@ -883,7 +883,7 @@ public:
      */
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
 	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius, Function&& condition) const {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		const auto kernel = kernelFactory<kernel>(p, radius);
 		return numNeighbors(kernel, std::forward<Function&&>(condition));
 	}
 };

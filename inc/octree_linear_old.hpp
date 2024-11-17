@@ -417,7 +417,7 @@ public:
    * @return Points inside the given kernel type
    */
 	{
-		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		const auto kernel = kernelFactory<kernel>(p, radii);
 		return neighbors(kernel, std::forward<Function&&>(condition));
 	}
 

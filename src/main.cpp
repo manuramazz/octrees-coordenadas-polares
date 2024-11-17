@@ -10,6 +10,7 @@
 #include "benchmarking.hpp"
 #include <octree_benchmark.hpp>
 #include <random>
+#include "NeighborKernels/KernelFactory.hpp"
 namespace fs = std::filesystem;
 
 int main(int argc, char *argv[]) {
@@ -36,7 +37,6 @@ int main(int argc, char *argv[]) {
 
   tw.start();
   std::vector<Lpoint> points = readPointCloud(mainOptions.inputFile);
-
   // {0, 1, ..., 15}^3 testing grid
   // std::vector<Lpoint> points;
   // points.reserve(16*16*16);
@@ -47,7 +47,6 @@ int main(int argc, char *argv[]) {
   //       }
   //   }  
   // }
-
   tw.stop();
 
   std::cout << "Number of read points: " << points.size() << "\n";
@@ -67,7 +66,20 @@ int main(int argc, char *argv[]) {
   std::vector<Lpoint> lsOctreePoints(points);
   
   OctreeBenchmark ob(points, lsOctreePoints);
-  ob.benchmarkSearchNeighSphere(1);
+  
+  ob.benchmarkSearchNeigh<Kernel_t::sphere>();
+  ob.benchmarkSearchNeigh<Kernel_t::circle>();
+  ob.benchmarkSearchNeigh<Kernel_t::cube>();
+  ob.benchmarkSearchNeigh<Kernel_t::square>();
+
+  ob.benchmarkNumNeigh<Kernel_t::sphere>();
+  ob.benchmarkNumNeigh<Kernel_t::circle>();
+  ob.benchmarkNumNeigh<Kernel_t::cube>();
+  ob.benchmarkNumNeigh<Kernel_t::square>();
+  
+  ob.benchmarkKNN();
+
+  ob.benchmarkRingSearchNeigh();
 
   return EXIT_SUCCESS;
 }
