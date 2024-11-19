@@ -27,7 +27,11 @@ class Stats
 	mutable bool computed_stdev_{};
 	mutable T    stdev_{};
 
+	const bool warmup;
+
 	public:
+	Stats(bool warmup): warmup(warmup) {}
+
 	inline void add_value(const T value)
 	{
 		mean_ = (mean_ * values_.size() + value) / (values_.size() + 1);
@@ -71,20 +75,23 @@ class Stats
 
 		return stdev_;
 	}
+
+	inline const bool usedWarmup() const { return warmup; }
 };
 
 template<typename F>
-auto benchmark(const size_t repeats, F function)
+auto benchmark(const size_t repeats, F function, size_t warmupRepeats = 1)
 {
-	Stats stats;
-
-	for (size_t i = 0; i < repeats; i++)
+	Stats stats(warmupRepeats >= 1);
+	size_t totalRepeats = repeats + warmupRepeats;
+	for (size_t i = 0; i < totalRepeats; i++)
 	{
 		TimeWatcher tw;
 		tw.start();
 		function();
 		tw.stop();
-		stats.add_value(tw.getElapsedDecimalSeconds());
+		if(i >= warmupRepeats)
+			stats.add_value(tw.getElapsedDecimalSeconds());
 	}
 
 	return stats;

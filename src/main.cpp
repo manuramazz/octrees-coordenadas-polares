@@ -66,21 +66,21 @@ int main(int argc, char *argv[]) {
   // Copy of the points for the linear octree
   std::vector<Lpoint> lOctreePoints(points);
   
-  OctreeBenchmark ob(points, lOctreePoints, 1000);
+  OctreeBenchmark ob(points, lOctreePoints, 5000);
   
-  ob.benchmarkSearchNeigh<Kernel_t::sphere>();
-  ob.benchmarkSearchNeigh<Kernel_t::circle>();
-  ob.benchmarkSearchNeigh<Kernel_t::cube>();
-  ob.benchmarkSearchNeigh<Kernel_t::square>();
+  ob.benchmarkSearchNeigh<Kernel_t::sphere>(5);
+  ob.benchmarkSearchNeigh<Kernel_t::circle>(5);
+  ob.benchmarkSearchNeigh<Kernel_t::cube>(5);
+  ob.benchmarkSearchNeigh<Kernel_t::square>(5);
 
-  ob.benchmarkNumNeigh<Kernel_t::sphere>();
-  ob.benchmarkNumNeigh<Kernel_t::circle>();
-  ob.benchmarkNumNeigh<Kernel_t::cube>();
-  ob.benchmarkNumNeigh<Kernel_t::square>();
+  ob.benchmarkNumNeigh<Kernel_t::sphere>(5);
+  ob.benchmarkNumNeigh<Kernel_t::circle>(5);
+  ob.benchmarkNumNeigh<Kernel_t::cube>(5);
+  ob.benchmarkNumNeigh<Kernel_t::square>(5);
   
-  ob.benchmarkKNN();
+  ob.benchmarkKNN(5);
 
-  ob.benchmarkRingSearchNeigh();
+  ob.benchmarkRingSearchNeigh(5);
 
   return EXIT_SUCCESS;
 }
