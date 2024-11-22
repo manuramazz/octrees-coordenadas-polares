@@ -47,7 +47,7 @@ In the project directory, just execute
 This creates the executable build/rule-based-classifier-cpp.
 
 ### Execution
-    ./build/rule-based-classifier-cpp -i data/alcoy.las [-o output_dir]
+    ./build/rule-based-classifier-cpp [-i input_file] [-o output_dir]
 
 ## Authorship
 Grupo de Arquitectura de Computadores (GAC)  

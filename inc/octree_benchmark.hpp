@@ -15,7 +15,7 @@ class OctreeBenchmark {
     private:
         const size_t numSearches;
 
-        constexpr static bool CHECK_RESULTS = false;
+        constexpr static bool CHECK_RESULTS = true;
         constexpr static uint32_t MIN_KNN = 5;
         constexpr static uint32_t MAX_KNN = 100;
 
@@ -40,11 +40,6 @@ class OctreeBenchmark {
         std::vector<size_t> numNeighResultsOldLinear;
         std::vector<size_t> numNeighResultsLinear;
 
-        void allocateSearchSetMemory() {
-            searchPointIndexes.resize(numSearches);
-            searchKNNLimits.resize(numSearches);
-        }
-
         void allocateResultCheckingMemory() {
             searchResultsPointer.resize(numSearches);
             searchResultsOldLinear.resize(numSearches);
@@ -56,12 +51,15 @@ class OctreeBenchmark {
 
         void generateSearchSet() {
             rng.seed(42);
+            searchPointIndexes.resize(numSearches);
+            searchKNNLimits.resize(numSearches);
             std::uniform_int_distribution<size_t> indexDist(0, points.size()-1);
             std::uniform_int_distribution<size_t> knnDist(MIN_KNN, MAX_KNN);
-            for(int i = 0; i<numSearches; i++) {
-                searchPointIndexes[i] = indexDist(rng);
-                searchKNNLimits[i] = knnDist(rng);
-            }
+            
+                for(int i = 0; i<numSearches; i++) {
+                    searchPointIndexes[i] = indexDist(rng);
+                    searchKNNLimits[i] = knnDist(rng);
+                }
         }
 
         bool checkNeighSearchResults(float radii) {
@@ -514,20 +512,18 @@ class OctreeBenchmark {
     public:
         OctreeBenchmark(std::vector<Lpoint> &points, std::vector<Lpoint> &lsOctreePoints, size_t numSearches = 100) : 
             points(points), lOctPoints(lsOctreePoints), numSearches(numSearches), startTimestamp(getCurrentDate()) {
-            allocateSearchSetMemory();
+            generateSearchSet();
+
             if(CHECK_RESULTS)
                 allocateResultCheckingMemory();
+            
             octreePointerBuild();
-            // octreeOldLinearBuild();
             octreeLinearBuild();
         }
 
         void benchmarkBuild(size_t repeats) {
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { octreePointerBuild(); });
             appendToCsv("pointer", "build", "NA", -1.0, statsPointer);
-
-            // auto statsOldLinear = benchmarking::benchmark(repeats, [this]() { octreeOldLinearBuild(); });
-            // appendToCsv("oldLinear", "build", "N/A", statsOldLinear);
 
             auto statsLinear = benchmarking::benchmark(repeats, [&]() { octreeLinearBuild(); });
             appendToCsv("linear", "build", "NA", -1.0, statsLinear);
@@ -537,13 +533,8 @@ class OctreeBenchmark {
         void benchmarkSearchNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
 
-            generateSearchSet();
-
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeSearchNeigh<kernel>(radius); });
             appendToCsv("pointer", "neighSearch", kernelStr, radius, statsPointer);
-
-            // auto statsOldLinear = benchmarking::benchmark(repeats, [this]() { oldLinearSearchNeigh<kernel>(radii); });
-            // appendToCsv("oldLinear", "neighSearch", kernelStr, statsOldLinear);
 
             auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeNeighborSearch<kernel>(radius); });
             appendToCsv("linear", "neighSearch", kernelStr, radius, statsLinear);
@@ -556,13 +547,8 @@ class OctreeBenchmark {
         void benchmarkNumNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
 
-            generateSearchSet();
-
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeNumNeigh<kernel>(radius); });
             appendToCsv("pointer", "numNeighSearch", kernelStr, radius, statsPointer);
-
-            // auto statsOldLinear = benchmarking::benchmark(repeats, [this]() { oldLinearOctreeNumNeigh<kernel>(radii); });
-            // appendToCsv("oldLinear", "numNeighSearch", kernelStr, statsOldLinear);
 
             auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeNumNeigh<kernel>(radius); });
             appendToCsv("linear", "numNeighSearch", kernelStr, radius, statsLinear);
@@ -572,13 +558,8 @@ class OctreeBenchmark {
         }
 
         void benchmarkKNN(size_t repeats) {
-            generateSearchSet();
-
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeKNN(); });
             appendToCsv("pointer", "KNN", "NA", -1.0, statsPointer);
-
-            // auto statsOldLinear = benchmarking::benchmark(repeats, [this]() { oldLinearOctreeKNN(); });
-            // appendToCsv("oldLinear", "KNN", "NA", statsOldLinear);
 
             auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeKNN(); });
             appendToCsv("linear", "KNN", "NA", -1.0, statsLinear);
@@ -588,13 +569,8 @@ class OctreeBenchmark {
         }
 
         void benchmarkRingSearchNeigh(size_t repeats, Vector &innerRadii, Vector &outerRadii) {
-            generateSearchSet();
-            
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeRingSearchNeigh(innerRadii, outerRadii); });
             appendToCsv("pointer", "ringNeighSearch", "NA", -1.0, statsPointer);
-
-            // auto statsOldLinear = benchmarking::benchmark(repeats, [this]() { oldLinearOctreeRingSearchNeigh(innerRadii, outerRadii); });
-            // appendToCsv("oldLinear", "ringNeighSearch", "NA", statsOldLinear);
 
             auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeRingSearchNeigh(innerRadii, outerRadii); });
             appendToCsv("linear", "ringNeighSearch", "NA", -1.0, statsLinear);

@@ -37,63 +37,51 @@ int main(int argc, char *argv[]) {
 
   tw.start();
   std::vector<Lpoint> points = readPointCloud(mainOptions.inputFile);
-  // {0, 1, ..., 15}^3 testing grid
-  // std::vector<Lpoint> points;
-  // points.reserve(16*16*16);
-  // for(int i = 0; i<16;i++) {
-  //     for(int j = 0; j<16;j++) {
-  //       for(int k = 0; k<16; k++) {
-  //           points.push_back(Lpoint(Point(i*1.0, j*1.0, k*1.0)));
-  //       }
-  //   }  
-  // }
   tw.stop();
 
   std::cout << "Number of read points: " << points.size() << "\n";
+  std::cout << "Size of the points array: " << points.size() * sizeof(Lpoint) / (1024.0 * 1024.0) << " MB \n";
   std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
             << " seconds\n";
-
-  // Global Octree Creation
-  // std::cout << "Building global octree..." << std::endl;
-  // tw.start();
-  // Octree gOctree(points);
-  // tw.stop();
-  // std::cout << "Time to build global octree: " << tw.getElapsedDecimalSeconds()
-  //           << " seconds\n";
-  // std::ofstream gOctreeStream(mainOptions.outputDirName / "global_octree.txt");
-  // gOctree.writeOctree(gOctreeStream, 0);
-
-  // Copy of the points for the linear octree
-  const size_t benchmarkSize = 10000;
+  
+  // Benchmark paramters
+  const size_t benchmarkSize = 50;
+  // TODO: maybe a better idea is to choose radii based on point cloud density
+  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 3.5, 5.0};
+  const size_t repeats = 5;
+  // TODO: For now we copy the points for the linear octree, since they get sorted and so its better if they are separate
+  // Should change this to first execute all benchmarks in pointer octree, then sort, then execute them in linear octree
+  // This way we don't waste memory and can run bigger examples.
   std::vector<Lpoint> lOctreePoints(points);
   OctreeBenchmark ob(points, lOctreePoints, benchmarkSize);
   
-  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 5.0, 10.0};
-  const size_t REPEATS = 5;
-  std::cout << "Running benchmarks with sarch radii {";
+
+  std::cout << "Running benchmarks with search radii {";
   for(int i = 0; i<benchmarkRadii.size(); i++) {
     std::cout << benchmarkRadii[i];
     if(i != benchmarkRadii.size()-1) {
       std::cout << ", ";
     }
   }
-  std::cout << "} with " << REPEATS << " repeats each over a set of " << benchmarkSize << "random center points." << std::endl;
+  std::cout << "} with " << repeats << " repeats each over a set of " << benchmarkSize << " random center points." << std::endl;
+
   for(int i = 0; i<benchmarkRadii.size(); i++) {
-    ob.benchmarkSearchNeigh<Kernel_t::sphere>(5, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::circle>(5, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::cube>(5, benchmarkRadii[i]);
-    ob.benchmarkSearchNeigh<Kernel_t::square>(5, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
     std::cout << "Benchmark search neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
   }
 
   for(int i = 0; i<benchmarkRadii.size(); i++) {
-    ob.benchmarkNumNeigh<Kernel_t::sphere>(5, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::circle>(5, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::cube>(5, benchmarkRadii[i]);
-    ob.benchmarkNumNeigh<Kernel_t::square>(5, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
     std::cout << "Benchmark number of neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
   }
 
+  // TODO: fix the implementation of this other two benchmarks
   // ob.benchmarkKNN(5);
   // ob.benchmarkRingSearchNeigh(5);
 
