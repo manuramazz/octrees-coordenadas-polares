@@ -64,23 +64,38 @@ int main(int argc, char *argv[]) {
   // gOctree.writeOctree(gOctreeStream, 0);
 
   // Copy of the points for the linear octree
+  const size_t benchmarkSize = 10000;
   std::vector<Lpoint> lOctreePoints(points);
+  OctreeBenchmark ob(points, lOctreePoints, benchmarkSize);
   
-  OctreeBenchmark ob(points, lOctreePoints, 5000);
-  
-  ob.benchmarkSearchNeigh<Kernel_t::sphere>(5);
-  ob.benchmarkSearchNeigh<Kernel_t::circle>(5);
-  ob.benchmarkSearchNeigh<Kernel_t::cube>(5);
-  ob.benchmarkSearchNeigh<Kernel_t::square>(5);
+  const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 5.0, 10.0};
+  const size_t REPEATS = 5;
+  std::cout << "Running benchmarks with sarch radii {";
+  for(int i = 0; i<benchmarkRadii.size(); i++) {
+    std::cout << benchmarkRadii[i];
+    if(i != benchmarkRadii.size()-1) {
+      std::cout << ", ";
+    }
+  }
+  std::cout << "} with " << REPEATS << " repeats each over a set of " << benchmarkSize << "random center points." << std::endl;
+  for(int i = 0; i<benchmarkRadii.size(); i++) {
+    ob.benchmarkSearchNeigh<Kernel_t::sphere>(5, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::circle>(5, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::cube>(5, benchmarkRadii[i]);
+    ob.benchmarkSearchNeigh<Kernel_t::square>(5, benchmarkRadii[i]);
+    std::cout << "Benchmark search neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
+  }
 
-  ob.benchmarkNumNeigh<Kernel_t::sphere>(5);
-  ob.benchmarkNumNeigh<Kernel_t::circle>(5);
-  ob.benchmarkNumNeigh<Kernel_t::cube>(5);
-  ob.benchmarkNumNeigh<Kernel_t::square>(5);
-  
-  ob.benchmarkKNN(5);
+  for(int i = 0; i<benchmarkRadii.size(); i++) {
+    ob.benchmarkNumNeigh<Kernel_t::sphere>(5, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::circle>(5, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::cube>(5, benchmarkRadii[i]);
+    ob.benchmarkNumNeigh<Kernel_t::square>(5, benchmarkRadii[i]);
+    std::cout << "Benchmark number of neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
+  }
 
-  ob.benchmarkRingSearchNeigh(5);
+  // ob.benchmarkKNN(5);
+  // ob.benchmarkRingSearchNeigh(5);
 
   return EXIT_SUCCESS;
 }

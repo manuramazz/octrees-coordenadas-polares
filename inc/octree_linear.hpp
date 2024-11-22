@@ -124,6 +124,8 @@ private:
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     float halfLengths[3];
     
+    uint32_t maxDepthSeen = 0;
+
     /**
      * @brief Computes the rebalacing decisions as the first process in the subdivision of the leaves array
      * 
@@ -171,11 +173,26 @@ private:
         uint32_t nodeCount = counts[index];
         // Decide if we split or not
         // TODO: check MIN_OCTANT_RADIUS
-        if (nodeCount > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { return 4096; } // split into 4 layers
-        if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { return 512; }   // split into 3 layers
-        if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { return 64; }     // split into 2 layers
-        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH ) { return 8; } // split into 1 layer
-        
+        // split into 4 layers
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < MortonEncoder::MAX_DEPTH) { 
+            maxDepthSeen = std::max(maxDepthSeen, level + 4);
+            return 4096; 
+        }
+        // split into 3 layers
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < MortonEncoder::MAX_DEPTH) { 
+            maxDepthSeen = std::max(maxDepthSeen, level + 3);
+            return 512;
+        }
+        // split into 2 layers
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < MortonEncoder::MAX_DEPTH) { 
+            maxDepthSeen = std::max(maxDepthSeen, level + 2);
+            return 64; 
+        }
+        // split into 1 layer
+        if (nodeCount > MAX_POINTS && level < MortonEncoder::MAX_DEPTH ) { 
+            maxDepthSeen = std::max(maxDepthSeen, level + 1);
+            return 8; 
+        }
         return 1; // dont do anything
     }
 
@@ -405,8 +422,8 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Lpoint> &points, bool printPerformanceMeasures = false): points(points) {
-        if(printPerformanceMeasures)
+    explicit LinearOctree(std::vector<Lpoint> &points, bool printLog = false): points(points) {
+        if(printLog)
             std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;
         TimeWatcher tw;
@@ -415,7 +432,7 @@ public:
             step();
             tw.stop();
             total_time += tw.getElapsedDecimalSeconds();
-            if(printPerformanceMeasures)
+            if(printLog)
                 std::cout << "  Time to " << action << ": " << tw.getElapsedDecimalSeconds() << " seconds\n";
         };
 
@@ -425,8 +442,13 @@ public:
         buildStep([&] { resize(); }, "allocate space for internal variables");
         buildStep([&] { buildOctreeInternal(); }, "build internal part of the octree and link it");
         buildStep([&] { computeGeometry(); }, "compute octree geometry");
-        if(printPerformanceMeasures)
+        if(printLog) {
             std::cout << "Total time to build linear octree: " << total_time << " seconds\n";
+            std::cout << "Total number of nodes in the octree: " << nTotal << std::endl;
+            std::cout << "  Number of leafs: " << nLeaf << std::endl;
+            std::cout << "  Number of internal nodes: " << nInternal << std::endl;
+            std::cout << "Max depth seen " << maxDepthSeen << " with leafs of radii: " << precomputedRadii[maxDepthSeen] << std::endl;
+        }
     }
 
     /**
@@ -696,7 +718,7 @@ public:
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Lpoint& p = this->points[j];  // Now we can get a non-const reference
+                Lpoint& p = this->points[j];
                 if (k.isInside(p) && center_id != p.id() && condition(p)) {
                     ptsInside++;
                 }

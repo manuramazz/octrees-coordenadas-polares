@@ -31,6 +31,7 @@ class main_options
 	// Files & paths
 	fs::path      inputFile{};
 	fs::path      outputDirName{};
+	std::string   inputFileName{};
 };
 
 extern main_options mainOptions;

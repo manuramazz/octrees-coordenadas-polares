@@ -44,6 +44,7 @@ void processArgs(int argc, char** argv)
 			case 'i': {
 				mainOptions.inputFile = fs::path(std::string(optarg));
 				std::cout << "Read file set to: " << mainOptions.inputFile << "\n";
+				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
 			}
 			case 'o': {
