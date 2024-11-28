@@ -11,6 +11,9 @@
 
 class Region; // Region forward declaration
 
+/**
+ * 64-byte-aligned adaptation of the Lpoint class
+ */
 class alignas(64) Lpoint64 : public Point
 {
 	protected:

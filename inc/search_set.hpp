@@ -12,10 +12,9 @@ struct SearchSet {
     constexpr static uint32_t MAX_KNN = 100;
     std::mt19937 rng;
 
-    template <typename Point_t>
+    template <PointType Point_t>
     SearchSet(size_t numSearches, const std::vector<Point_t>& points)
         : numSearches(numSearches) {
-        static_assert(std::is_base_of_v<Point, Point_t>, "PointType must inherit from Point");
 
         rng.seed(42);
         searchPoints.resize(numSearches);

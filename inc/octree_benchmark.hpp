@@ -1,506 +1,96 @@
 #pragma once
 
 #include "benchmarking.hpp"
-#include "octree.hpp"
-#include "octree_linear.hpp"
-#include "octree_linear_old.hpp"
-#include "morton_encoder.hpp"
 #include <random>
-#include "point.hpp"
 #include <omp.h>
 #include "NeighborKernels/KernelFactory.hpp"
+#include "octree_factory.hpp"
+#include "search_set.hpp"
 
-
+template <OctreeType Octree_t, PointType Point_t>
 class OctreeBenchmark {
     private:
-        const size_t numSearches;
+        constexpr static bool CHECK_RESULTS = false;
 
-        constexpr static bool CHECK_RESULTS = true;
-        constexpr static uint32_t MIN_KNN = 5;
-        constexpr static uint32_t MAX_KNN = 100;
+        const std::unique_ptr<Octree_t> oct;
+        std::vector<Point_t>& points;
 
-        const std::string startTimestamp;
-        // Copy points for the linear octree because it reorders them and also to be more fair on comparisons
-        // i.e. neither tree has points already in-cache when executing after the other
-        std::vector<Lpoint> &points, &lOctPoints;
-
-        Octree* pOct = nullptr;
-        LinearOctreeOld* oldLOct = nullptr;
-        LinearOctree *lOct = nullptr;
-        std::mt19937 rng;
+        std::ofstream &outputFile;
         
-        std::vector<size_t> searchPointIndexes;
-        std::vector<uint32_t> searchKNNLimits;
-
-        std::vector<std::vector<Lpoint*>> searchResultsPointer;
-        std::vector<std::vector<Lpoint*>> searchResultsOldLinear;
-        std::vector<std::vector<Lpoint*>> searchResultsLinear;
-
-        std::vector<size_t> numNeighResultsPointer;
-        std::vector<size_t> numNeighResultsOldLinear;
-        std::vector<size_t> numNeighResultsLinear;
-
-        void allocateResultCheckingMemory() {
-            searchResultsPointer.resize(numSearches);
-            searchResultsOldLinear.resize(numSearches);
-            searchResultsLinear.resize(numSearches);
-            numNeighResultsPointer.resize(numSearches);
-            numNeighResultsOldLinear.resize(numSearches);
-            numNeighResultsLinear.resize(numSearches);
-        }
-
-        void generateSearchSet() {
-            rng.seed(42);
-            searchPointIndexes.resize(numSearches);
-            searchKNNLimits.resize(numSearches);
-            std::uniform_int_distribution<size_t> indexDist(0, points.size()-1);
-            std::uniform_int_distribution<size_t> knnDist(MIN_KNN, MAX_KNN);
-            
-                for(int i = 0; i<numSearches; i++) {
-                    searchPointIndexes[i] = indexDist(rng);
-                    searchKNNLimits[i] = knnDist(rng);
-                }
-        }
-
-        bool checkNeighSearchResults(float radii) {
-            bool correct = true;
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto oldLin = searchResultsLinear[i];
-                if(point.size() != oldLin.size()) {
-                            std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Old linear = " << oldLin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with radii " << radii << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(oldLin.begin(), oldLin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != oldLin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Old linear =  " << oldLin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto lin = searchResultsLinear[i];
-                if(point.size() != lin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Linear = " << lin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with radii " << radii << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(lin.begin(), lin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != lin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Linear =  " << lin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-            return correct;
-        }
-        bool checkKNNSearchResults() {
-                        bool correct = true;
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto oldLin = searchResultsLinear[i];
-                if(point.size() != oldLin.size()) {
-                            std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Old linear = " << oldLin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(oldLin.begin(), oldLin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != oldLin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Old linear =  " << oldLin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto lin = searchResultsLinear[i];
-                if(point.size() != lin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Linear = " << lin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(lin.begin(), lin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != lin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Linear =  " << lin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-            return correct;
-        }
-
-        bool checkNumNeighResults(float radii) {
-            bool correct = true;
-            for(int i = 0; i<numSearches; i++) {
-                size_t point = numNeighResultsPointer[i];
-                size_t oldLin = numNeighResultsLinear[i];
-                if(point != oldLin) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point << " Old linear = " << oldLin << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with radii " << radii << std::endl;
-                    correct = false;
-                }
-            }
-            for(int i = 0; i<numSearches; i++) {
-                size_t point = numNeighResultsPointer[i];
-                size_t lin = numNeighResultsLinear[i];
-                if(point != lin) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point << " Linear = " << lin << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with radii " << radii << std::endl;
-                    correct = false;
-                }
-            }
-            return correct;
-        }
-
-        bool checkNeighKNNResults() {
-            bool correct = true;
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto oldLin = searchResultsLinear[i];
-                if(point.size() != oldLin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Old linear = " << oldLin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with max KNN " << searchKNNLimits[i] << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(oldLin.begin(), oldLin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != oldLin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Old linear =  " << oldLin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto lin = searchResultsLinear[i];
-                if(point.size() != lin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Linear = " << lin.size() << std::endl << 
-                    "Search center: " << points[searchPointIndexes[i]] << " with max KNN " << searchKNNLimits[i] << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(lin.begin(), lin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != lin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Linear =  " << lin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-            return correct;
-        }
-
-        bool checkRingNeighSearchResults(Vector& innerRadii, Vector& outerRadii) {
-            bool correct = true;
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto oldLin = searchResultsLinear[i];
-                if(point.size() != oldLin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Old linear = " << oldLin.size() << "\n" << 
-                    "  Search center: " << points[searchPointIndexes[i]] << "\n" <<
-                    "  Inner radii of the ring " << innerRadii << "\n" <<
-                    "   Outer radii of the ring " << outerRadii << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(oldLin.begin(), oldLin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != oldLin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Old linear =  " << oldLin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-            for(int i = 0; i<numSearches; i++) {
-                auto point = searchResultsPointer[i];
-                auto lin = searchResultsLinear[i];
-                if(point.size() != lin.size()) {
-                    std::cout << "Wrong search result size in set " << i << 
-                    "\n Pointer = " << point.size() << " Linear = " << lin.size() << "\n" << 
-                    "  Search center: " << points[searchPointIndexes[i]] << "\n" <<
-                    "  Inner radii of the ring " << innerRadii << "\n" <<
-                    "   Outer radii of the ring " << outerRadii << std::endl;
-                    correct = false;
-                } else {
-                    sort(point.begin(), point.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    sort(lin.begin(), lin.end(), [&] (Lpoint *p, Lpoint* q) -> bool {
-                        return p->id() < q->id();
-                    });
-                    for(int j = 0; j<point.size(); j++){
-                        if(point[j]->id() != lin[j]->id()) {
-                            std::cout << "Wrong search result point in set " << i << " at index " << j <<
-                            "\n Pointer = " << point[j]->id() << " Linear =  " << lin[j]->id() << std::endl;
-                            correct = false;
-                        }
-                    }
-                }
-            }
-            return correct;
-        }
-
-
-        void octreePointerBuild() {
-            // Pointer based octree
-            if(pOct != nullptr)
-                delete pOct;
-            pOct = new Octree(points);
-        }
-        void octreeOldLinearBuild() {
-            // Old linear octree impl.
-            if(oldLOct != nullptr)
-                delete oldLOct;
-            oldLOct = new LinearOctreeOld(points);
-        }
-        void octreeLinearBuild() {
-            // Linear octree impl.
-            if(lOct != nullptr)
-                delete lOct;
-            lOct = new LinearOctree(lOctPoints, true);
+        void rebuild() {
+            oct = std::make_unique<Octree_t>(points); 
         }
 
         template<Kernel_t kernel>
-        void pointerOctreeSearchNeigh(float radii) {
+        void searchNeighParallel(float radii) {
+            if(CHECK_RESULTS && resultsNeigh.empty())
+                resultsNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS){
-                        searchResultsPointer[i] = pOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
+                        resultsNeigh[i] = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else{
-                        (void) pOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                        
+                        auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
 
         template<Kernel_t kernel>
-        void oldLinearSearchNeigh(float radii) {
+        void numNeighParallel(float radii) {
+            if(CHECK_RESULTS && resultsNumNeigh.empty())
+                resultsNumNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS){
-                        searchResultsOldLinear[i] = oldLOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                    }else{
-                        (void) oldLOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                        
-                    }
-                }
-        }
-
-        template<Kernel_t kernel>
-        void linearOctreeNeighborSearch(float radii) {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS){
-                        searchResultsLinear[i] = lOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                    } else {
-                        (void) lOct->searchNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                    }
-                }
-        }
-
-        template<Kernel_t kernel>
-        void pointerOctreeNumNeigh(float radii) {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {
-                        numNeighResultsPointer[i] = pOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
+                        resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
-                        (void) pOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
+                        auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     }
                 }
         }
 
-        template<Kernel_t kernel>
-        void oldLinearOctreeNumNeigh(float radii) {
+        void KNNParallel() {
+            if(CHECK_RESULTS && resultsKNN.empty())
+                resultsKNN.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {
-                        numNeighResultsOldLinear[i] = oldLOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
+                        resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        (void) oldLOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
+                        auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }
 
-        template<Kernel_t kernel>
-        void linearOctreeNumNeigh(float radii) {
+        void ringNeighSearchParallel(Vector &innerRadii, Vector &outerRadii) {
+            if(CHECK_RESULTS && resultsRingNeigh.empty())
+                resultsRingNeigh.resize(searchSet->numSearches);
             #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        numNeighResultsLinear[i] = lOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                    } else {
-                        (void) lOct->numNeighbors<kernel>(points[searchPointIndexes[i]], radii);
-                    }
-                }
-        }
-
-        void pointerOctreeKNN() {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        searchResultsPointer[i] = pOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    } else {
-                        (void) pOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    }
-                }
-        }
-
-        void oldLinearOctreeKNN() {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        searchResultsOldLinear[i] = oldLOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    } else {
-                        (void) oldLOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    }
-                }
-        }
-
-        void linearOctreeKNN() {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        searchResultsLinear[i] = lOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    } else {
-                        (void) lOct->KNN(points[searchPointIndexes[i]], searchKNNLimits[i], searchKNNLimits[i]);
-                    }
-                }
-        }
-
-        void pointerOctreeRingSearchNeigh(Vector &innerRadii, Vector &outerRadii) {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
                     if(CHECK_RESULTS) {    
-                        searchResultsPointer[i] = pOct->searchNeighborsRing(points[searchPointIndexes[i]], 
+                        resultsRingNeigh[i] = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     } else {
-                        (void) pOct->searchNeighborsRing(points[searchPointIndexes[i]], 
+                        auto result = oct->template searchNeighborsRing(searchSet->searchPoints[i], 
                             innerRadii, outerRadii);
                     }
                 }
         }
 
-        void oldLinearOctreeRingSearchNeigh(Vector &innerRadii, Vector &outerRadii) {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        searchResultsOldLinear[i] = oldLOct->searchNeighborsRing(points[searchPointIndexes[i]], 
-                            innerRadii, outerRadii);
-                    } else {
-                        (void) oldLOct->searchNeighborsRing(points[searchPointIndexes[i]], 
-                            innerRadii, outerRadii);
-                    }
-                }
-        }
-
-        void linearOctreeRingSearchNeigh(Vector &innerRadii, Vector &outerRadii) {
-            #pragma omp parallel for schedule(static)
-                for(int i = 0; i<numSearches; i++) {
-                    if(CHECK_RESULTS) {
-                        searchResultsLinear[i] = lOct->searchNeighborsRing(points[searchPointIndexes[i]], 
-                            innerRadii, outerRadii);
-                    } else {
-                        (void) lOct->searchNeighborsRing(points[searchPointIndexes[i]], 
-                            innerRadii, outerRadii);
-                    }
-                }
-        }
-
-        inline std::string getCurrentDate() {
-            auto t = std::time(nullptr);
-            auto tm = *std::localtime(&t);
-            std::ostringstream oss;
-            oss << std::put_time(&tm, "%Y-%m-%d-%H:%M:%S");
-            return oss.str();
-        }
-
-        inline void appendToCsv(const std::string& octree, const std::string& operation, 
+        inline void appendToCsv(const std::string& operation, 
                             const std::string& kernel, const float radius, const benchmarking::Stats<>& stats) {
-            // Open the file in append mode
-            std::string csvFilename = mainOptions.inputFileName + "-" + startTimestamp + ".csv";
-            std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
-            std::ofstream file(csvPath, std::ios::app);
-            if (!file.is_open()) {
-                throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
-            }
-
             // Check if the file is empty and append header if it is
-            if (file.tellp() == 0) {
-                file << "date,octree,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
+            if (outputFile.tellp() == 0) {
+                outputFile << "date,octree,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
             }
 
             // Append the benchmark data
-            file << getCurrentDate() << ',' 
-                << octree << ',' 
+            outputFile << getCurrentDate() << ',' 
+                << getOctreeName<Octree_t, Point_t>() << ',' 
                 << operation << ',' 
                 << kernel << ',' 
                 << radius << ','
-                << numSearches << ',' 
+                << searchSet->numSearches << ',' 
                 << stats.size() << ','
                 << stats.accumulated() << ',' 
                 << stats.mean() << ',' 
@@ -508,74 +98,200 @@ class OctreeBenchmark {
                 << stats.stdev() << ','
                 << stats.usedWarmup() << '\n';
         }
-    
-    public:
-        OctreeBenchmark(std::vector<Lpoint> &points, std::vector<Lpoint> &lsOctreePoints, size_t numSearches = 100) : 
-            points(points), lOctPoints(lsOctreePoints), numSearches(numSearches), startTimestamp(getCurrentDate()) {
-            generateSearchSet();
 
-            if(CHECK_RESULTS)
-                allocateResultCheckingMemory();
-            
-            octreePointerBuild();
-            octreeLinearBuild();
+        // Generic check for neighbor results
+        template <typename Point_t2>
+        static std::vector<size_t> checkNeighResults(std::vector<std::vector<Point_t2*>> &results1, std::vector<std::vector<Point_t2*>> &results2)
+        {
+            std::vector<size_t> wrongSearches;
+            for (size_t i = 0; i < results1.size(); i++) {
+                auto v1 = results1[i];
+                auto v2 = results2[i];
+                if (v1.size() != v2.size()) {
+                    wrongSearches.push_back(i);
+                } else {
+                    std::sort(v1.begin(), v1.end(), [](Point_t2 *p, Point_t2* q) -> bool {
+                        return p->id() < q->id();
+                    });
+                    std::sort(v2.begin(), v2.end(), [](Point_t2 *p, Point_t2* q) -> bool {
+                        return p->id() < q->id();
+                    });
+                    for (size_t j = 0; j < v1.size(); j++) {
+                        if (v1[j]->id() != v2[j]->id()) {
+                            wrongSearches.push_back(i);
+                            break;
+                        }
+                    }
+                }
+            }
+            return wrongSearches;
+        }
+
+        // Generic check for the number of neighbors
+        static std::vector<size_t> checkNumNeighResults(std::vector<size_t> &results1, std::vector<size_t> &results2)
+        {
+            std::vector<size_t> wrongSearches;
+            for (size_t i = 0; i < results1.size(); i++) {
+                auto n1 = results1[i];
+                auto n2 = results2[i];
+                if (n1 != n2) {
+                    wrongSearches.push_back(i);
+                }
+            }
+            return wrongSearches;
+        }
+
+        // Operation for checking neighbor results
+        template <typename Point_t2>
+        static void checkOperationNeigh(
+            std::vector<std::vector<Point_t2*>> &results1,
+            std::vector<std::vector<Point_t2*>> &results2,
+            size_t printingLimit = 10)
+        {
+            std::vector<size_t> wrongSearches = checkNeighResults(results1, results2);
+            if (wrongSearches.size() > 0) {
+                std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+                for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                    size_t idx = wrongSearches[i];
+                    size_t nPoints1 = results1[idx].size(), nPoints2 = results2[idx].size();
+                    std::cout << "\tAt set " << idx << " with "
+                            << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+                }
+
+                if (wrongSearches.size() > printingLimit) {
+                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+                }
+            } else {
+                std::cout << "All results are right!" << std::endl;
+            }
+        }
+
+        // Operation for checking number of neighbor results
+        static void checkOperationNumNeigh(
+            std::vector<size_t> &results1,
+            std::vector<size_t> &results2,
+            size_t printingLimit = 10)
+        {
+            std::vector<size_t> wrongSearches = checkNumNeighResults(results1, results2);
+            if (wrongSearches.size() > 0) {
+                std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+                for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                    size_t idx = wrongSearches[i];
+                    size_t nPoints1 = results1[idx], nPoints2 = results2[idx];
+                    std::cout << "\tAt set " << idx << " with "
+                            << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+                }
+
+                if (wrongSearches.size() > printingLimit) {
+                    std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+                }
+            } else {
+                std::cout << "All results are right!" << std::endl;
+            }
+        }
+
+    public:
+        using PointType = Point_t;
+        const std::shared_ptr<const SearchSet> searchSet;
+        std::vector<std::vector<Point_t*>> resultsNeigh;
+        std::vector<size_t> resultsNumNeigh;
+        std::vector<std::vector<Point_t*>> resultsKNN;
+        std::vector<std::vector<Point_t*>> resultsRingNeigh;
+
+        OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream()) :
+            points(points), 
+            oct(std::make_unique<Octree_t>(points)),
+            searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
+            outputFile(file) {
         }
 
         void benchmarkBuild(size_t repeats) {
-            auto statsPointer = benchmarking::benchmark(repeats, [&]() { octreePointerBuild(); });
-            appendToCsv("pointer", "build", "NA", -1.0, statsPointer);
-
-            auto statsLinear = benchmarking::benchmark(repeats, [&]() { octreeLinearBuild(); });
-            appendToCsv("linear", "build", "NA", -1.0, statsLinear);
+            auto stats = benchmarking::benchmark(repeats, [&]() { rebuild(); });
+            appendToCsv("build", "NA", -1.0, stats);
         }
 
         template<Kernel_t kernel>
         void benchmarkSearchNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-
-            auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeSearchNeigh<kernel>(radius); });
-            appendToCsv("pointer", "neighSearch", kernelStr, radius, statsPointer);
-
-            auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeNeighborSearch<kernel>(radius); });
-            appendToCsv("linear", "neighSearch", kernelStr, radius, statsLinear);
-            
-            if (CHECK_RESULTS && checkNeighSearchResults(radius))
-                std::cout << "All neighbors search methods yield the same results!" << std::endl;
+            auto stats = benchmarking::benchmark(repeats, [&]() { searchNeighParallel<kernel>(radius); });
+            appendToCsv("neighSearch", kernelStr, radius, stats);
         }
 
         template<Kernel_t kernel>
         void benchmarkNumNeigh(size_t repeats, float radius) {
             const auto kernelStr = kernelToString(kernel);
-
-            auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeNumNeigh<kernel>(radius); });
-            appendToCsv("pointer", "numNeighSearch", kernelStr, radius, statsPointer);
-
-            auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeNumNeigh<kernel>(radius); });
-            appendToCsv("linear", "numNeighSearch", kernelStr, radius, statsLinear);
-            
-            if(CHECK_RESULTS && checkNumNeighResults(radius))
-                std::cout << "All count neighbors methods yield the same results!" << std::endl;
+            auto stats = benchmarking::benchmark(repeats, [&]() { numNeighParallel<kernel>(radius); });
+            appendToCsv("numNeighSearch", kernelStr, radius, stats);
         }
 
         void benchmarkKNN(size_t repeats) {
-            auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeKNN(); });
-            appendToCsv("pointer", "KNN", "NA", -1.0, statsPointer);
-
-            auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeKNN(); });
-            appendToCsv("linear", "KNN", "NA", -1.0, statsLinear);
-
-            if(CHECK_RESULTS && checkKNNSearchResults())
-                std::cout << "All KNN search methods yield the same results!" << std::endl;
+            auto stats = benchmarking::benchmark(repeats, [&]() { KNNParallel(); });
+            appendToCsv("KNN", "NA", -1.0, stats);
         }
 
         void benchmarkRingSearchNeigh(size_t repeats, Vector &innerRadii, Vector &outerRadii) {
-            auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeRingSearchNeigh(innerRadii, outerRadii); });
-            appendToCsv("pointer", "ringNeighSearch", "NA", -1.0, statsPointer);
-
-            auto statsLinear = benchmarking::benchmark(repeats, [&]() { linearOctreeRingSearchNeigh(innerRadii, outerRadii); });
-            appendToCsv("linear", "ringNeighSearch", "NA", -1.0, statsLinear);
-
-            if(CHECK_RESULTS && checkRingNeighSearchResults(innerRadii, outerRadii))
-                std::cout << "All KNN search methods yield the same results!" << std::endl; 
+            auto stats = benchmarking::benchmark(repeats, [&]() { ringNeighSearchParallel(innerRadii, outerRadii); });
+            appendToCsv("ringNeighSearch", "NA", -1.0, stats);
         }
+
+        static void runFullBenchmark(OctreeBenchmark &ob, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+            std::cout << "Running octree benchmark on " << getOctreeName<Octree_t, Point_t>() << " with parameters:" << std::endl;
+            std::cout << "  Search radii: {";
+            for(int i = 0; i<benchmarkRadii.size(); i++) {
+                std::cout << benchmarkRadii[i];
+                if(i != benchmarkRadii.size()-1) {
+                std::cout << ", ";
+                }
+            }
+            std::cout << "}" << std::endl;
+            std::cout << "  Number of searches: " << numSearches << std::endl;
+            std::cout << "  Repeats: " << repeats << std::endl << std::endl;
+
+            size_t total = benchmarkRadii.size() * 2;
+            for(int i = 0; i<benchmarkRadii.size(); i++) {
+                ob.benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                ob.benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+                ob.benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+                ob.benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
+                std::cout << "(" << (i+1) << "/" << total << ") Benchmark search neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
+            }
+
+            for(int i = 0; i<benchmarkRadii.size(); i++) {
+                ob.benchmarkNumNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                ob.benchmarkNumNeigh<Kernel_t::circle>(repeats, benchmarkRadii[i]);
+                ob.benchmarkNumNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
+                ob.benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
+                std::cout << "(" << (i+1+benchmarkRadii.size()) << "/" << total << ") Benchmark number of neighbors with radii " << benchmarkRadii[i] << " completed" << std::endl;
+            }
+
+            // TODO: fix the implementation of this other two benchmarks
+            // ob.benchmarkKNN(5);
+            // ob.benchmarkRingSearchNeigh(5);
+
+            std::cout << "Benchmark done!" << std::endl << std::endl;
+        }
+
+template <typename Octree_t1, typename Octree_t2>
+static void checkResults(
+    OctreeBenchmark<Octree_t1, typename Octree_t1::PointType> &bench1,
+    OctreeBenchmark<Octree_t2, typename Octree_t2::PointType> &bench2,
+    size_t printingLimit = 10)
+{
+    // Ensure the search sets are the same
+    assert(bench1.searchSet == bench2.searchSet && "The search sets of the benchmarks are not the same");
+
+    // Check neighbor search results if available
+    if (!bench1.resultsNeigh.empty() && !bench2.resultsNeigh.empty()) {
+        std::cout << "Checking search results for neighbor searches..." << std::endl;
+        checkOperationNeigh<typename Octree_t1::PointType>(bench1.resultsNeigh, bench2.resultsNeigh, printingLimit);
+    }
+
+    // Check number of neighbor search results if available
+    if (!bench1.resultsNumNeigh.empty() && !bench2.resultsNumNeigh.empty()) {
+        std::cout << "Checking search results for number of neighbor searches..." << std::endl;
+        checkOperationNumNeigh(bench1.resultsNumNeigh, bench2.resultsNumNeigh, printingLimit);
+    }
+}
+
+
 };
