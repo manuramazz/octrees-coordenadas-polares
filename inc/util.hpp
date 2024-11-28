@@ -33,6 +33,18 @@ void free(C& c)
 }
 } // namespace mem
 
+// Utility to check if a type is a subclass of Point
+template <typename T>
+concept PointType = std::is_base_of_v<Point, T>;
+
+// Concept for Octree classes
+template <typename T>
+concept OctreeType = requires {
+    typename T::PointType;  // T should have a member named PointType
+    requires PointType<typename T::PointType>;  // PointType should satisfy the PointType concept
+};
+
+
 template<typename... T>
 inline bool are_the_same(const std::vector<T...>& v1_, const std::vector<T...>& v2_)
 {
@@ -112,7 +124,8 @@ constexpr inline bool isNumber(const T x)
 	return (!std::isnan(x) && !std::isinf(x));
 }
 
-inline double ccw(const Lpoint* p1, const Lpoint* p2, const Lpoint* p3)
+template <PointType Point_t>
+inline double ccw(const Point_t* p1, const Point_t* p2, const Point_t* p3)
 /**
  * Counter-clockwise situation of 3 points (ccw > 0, cw < 0, colinear = 0)
  */
@@ -154,5 +167,6 @@ inline std::string getCurrentDate() {
 	oss << std::put_time(&tm, "%Y-%m-%d-%H:%M:%S");
 	return oss.str();
 }
+
 
 #endif //CPP_UTIL_H

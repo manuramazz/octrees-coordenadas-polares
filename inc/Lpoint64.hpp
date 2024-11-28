@@ -11,7 +11,7 @@
 
 class Region; // Region forward declaration
 
-class alignas(64) Lpoint2 : public Point
+class alignas(64) Lpoint64 : public Point
 {
 	protected:
 	double         I_{};             		// Intensity
@@ -42,21 +42,21 @@ class alignas(64) Lpoint2 : public Point
 
 	public:
 	// Default constructor
-	Lpoint2() : Point(){};
-	Lpoint2(size_t id, double x, double y, double z) : Point(id, x, y, z){};
-	Lpoint2(double x, double y) : Point(x, y){};
-	Lpoint2(double x, double y, double z) : Point(x, y, z){};
-	explicit Lpoint2(Point p) : Point(p.getX(), p.getY(), p.getZ()){};
+	Lpoint64() : Point(){};
+	Lpoint64(size_t id, double x, double y, double z) : Point(id, x, y, z){};
+	Lpoint64(double x, double y) : Point(x, y){};
+	Lpoint64(double x, double y, double z) : Point(x, y, z){};
+	explicit Lpoint64(Point p) : Point(p.getX(), p.getY(), p.getZ()){};
 
 
 	// Reading points ISPRS format
-	Lpoint2(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, unsigned int classification) :
+	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, unsigned int classification) :
 	  Point(id, x, y, z), I_(I), classification_(classification) {
 		setPackedFields(rn, nor, 0, 0);
 	  };
 
 	// Reading standard classified cloud
-	Lpoint2(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification) :
 	  Point(id, x, y, z),
 	  I_(I), classification_(classification) {
@@ -64,7 +64,7 @@ class alignas(64) Lpoint2 : public Point
 	  };
 
 	// Reading classified cloud with RGB
-	Lpoint2(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification, unsigned int r, unsigned int g, unsigned int b) :
 	  Point(id, x, y, z), I_(I), classification_(classification), r_(r), g_(g), b_(b) {
 		setPackedFields(rn, nor, dir, edge);
@@ -72,7 +72,7 @@ class alignas(64) Lpoint2 : public Point
 
 
 	// Reading Point Data Record Format 2 (Babcock / Coremain request)
-	Lpoint2(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
+	Lpoint64(size_t id, double x, double y, double z, double I, uint8_t rn, uint8_t nor, bool dir,
 	       bool edge, unsigned short classification, char sar, unsigned char ud, unsigned short psId,
 	       unsigned int r, unsigned int g, unsigned int b) :
 	  Point(id, x, y, z), I_(I), classification_(classification), 

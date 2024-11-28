@@ -9,41 +9,54 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include "Lpoint.hpp"
+#include "Lpoint64.hpp"
 
-Octree::Octree() = default;
+// TODO: move this implementations to octree.hpp so we dont need to predefine all the point types we need
+template class Octree<Lpoint>;
+template class Octree<Lpoint64>;
 
-Octree::Octree(std::vector<Lpoint>& points)
+template <PointType Point_t>
+Octree<Point_t>::Octree() = default;
+
+template <PointType Point_t>
+Octree<Point_t>::Octree(std::vector<Point_t>& points)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-Octree::Octree(std::vector<Lpoint*>& points)
+template <PointType Point_t>
+Octree<Point_t>::Octree(std::vector<Point_t*>& points)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-Octree::Octree(const Vector& center, const float radius) : center_(center), radius_(radius)
+template <PointType Point_t>
+Octree<Point_t>::Octree(const Vector& center, const float radius) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 };
 
-Octree::Octree(Vector center, float radius, std::vector<Lpoint*>& points) : center_(center), radius_(radius)
+template <PointType Point_t>
+Octree<Point_t>::Octree(Vector center, float radius, std::vector<Point_t*>& points) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-Octree::Octree(Vector center, float radius, std::vector<Lpoint>& points) : center_(center), radius_(radius)
+template <PointType Point_t>
+Octree<Point_t>::Octree(Vector center, float radius, std::vector<Point_t>& points) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-void Octree::computeOctreeLimits()
+template <PointType Point_t>
+void Octree<Point_t>::computeOctreeLimits()
 /**
    * Compute the minimum and maximum coordinates of the octree bounding box.
    */
@@ -54,7 +67,8 @@ void Octree::computeOctreeLimits()
 	max_.setY(center_.getY() + radius_);
 }
 
-std::vector<std::pair<Point, size_t>> Octree::computeNumPoints() const
+template <PointType Point_t>
+std::vector<std::pair<Point, size_t>> Octree<Point_t>::computeNumPoints() const
 /**
  * @brief Returns a vector containing the number of points of all populated octants
  * @param numPoints
@@ -80,7 +94,8 @@ std::vector<std::pair<Point, size_t>> Octree::computeNumPoints() const
 	return numPoints;
 }
 
-std::vector<std::pair<Point, double>> Octree::computeDensities() const
+template <PointType Point_t>
+std::vector<std::pair<Point, double>> Octree<Point_t>::computeDensities() const
 /*
  * Returns a vector containing the densities of all populated octrees
  */
@@ -105,7 +120,8 @@ std::vector<std::pair<Point, double>> Octree::computeDensities() const
 	return densities;
 }
 
-void Octree::writeDensities(const std::filesystem::path& path) const
+template <PointType Point_t>
+void Octree<Point_t>::writeDensities(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -121,7 +137,8 @@ void Octree::writeDensities(const std::filesystem::path& path) const
 	}
 }
 
-void Octree::writeNumPoints(const std::filesystem::path& path) const
+template <PointType Point_t>
+void Octree<Point_t>::writeNumPoints(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -138,7 +155,8 @@ void Octree::writeNumPoints(const std::filesystem::path& path) const
 }
 
 // FIXME: This function may overlap with some parts of extractPoint[s]
-const Octree* Octree::findOctant(const Lpoint* p) const
+template <PointType Point_t>
+const Octree<Point_t>* Octree<Point_t>::findOctant(const Point_t* p) const
 /**
  * @brief Find the octant containing a given point.
  * @param p
@@ -158,14 +176,15 @@ const Octree* Octree::findOctant(const Lpoint* p) const
 	}
 	else
 	{
-		// If Lpoint is const, fiesta loca!
+		// If Point_t is const, fiesta loca!
 		return octants_[octantIdx(p)].findOctant(p);
 	}
 
 	return nullptr;
 }
 
-bool Octree::isInside2D(const Point& p) const
+template <PointType Point_t>
+bool Octree<Point_t>::isInside2D(const Point& p) const
 /**
    * Checks if a point is inside the octree limits.
    * @param p
@@ -180,23 +199,26 @@ bool Octree::isInside2D(const Point& p) const
 	return false;
 }
 
-void Octree::insertPoints(std::vector<Lpoint>& points)
+template <PointType Point_t>
+void Octree<Point_t>::insertPoints(std::vector<Point_t>& points)
 {
-	for (Lpoint& p : points)
+	for (Point_t& p : points)
 	{
 		insertPoint(&p);
 	}
 }
 
-void Octree::insertPoints(std::vector<Lpoint*>& points)
+template <PointType Point_t>
+void Octree<Point_t>::insertPoints(std::vector<Point_t*>& points)
 {
-	for (Lpoint* p : points)
+	for (Point_t* p : points)
 	{
 		insertPoint(p);
 	}
 }
 
-void Octree::insertPoint(Lpoint* p)
+template <PointType Point_t>
+void Octree<Point_t>::insertPoint(Point_t* p)
 {
 	unsigned int idx = 0;
 
@@ -224,7 +246,8 @@ void Octree::insertPoint(Lpoint* p)
 	}
 }
 
-void Octree::createOctants()
+template <PointType Point_t>
+void Octree<Point_t>::createOctants()
 {
 	for (size_t i = 0; i < OCTANTS_PER_NODE; i++)
 	{
@@ -236,9 +259,10 @@ void Octree::createOctants()
 	}
 }
 
-void Octree::fillOctants()
+template <PointType Point_t>
+void Octree<Point_t>::fillOctants()
 {
-	for (Lpoint* p : points_)
+	for (Point_t* p : points_)
 	{
 		// Idx of the octant where a point should be inserted.
 		const auto idx = octantIdx(p);
@@ -248,7 +272,8 @@ void Octree::fillOctants()
 	points_.clear();
 }
 
-size_t Octree::octantIdx(const Lpoint* p) const
+template <PointType Point_t>
+size_t Octree<Point_t>::octantIdx(const Point_t* p) const
 {
 	size_t child = 0;
 
@@ -259,7 +284,8 @@ size_t Octree::octantIdx(const Lpoint* p) const
 	return child;
 }
 
-void Octree::buildOctree(std::vector<Lpoint>& points)
+template <PointType Point_t>
+void Octree<Point_t>::buildOctree(std::vector<Point_t>& points)
 /**
    * Build the Octree
    */
@@ -268,7 +294,8 @@ void Octree::buildOctree(std::vector<Lpoint>& points)
 	insertPoints(points);
 }
 
-void Octree::buildOctree(std::vector<Lpoint*>& points)
+template <PointType Point_t>
+void Octree<Point_t>::buildOctree(std::vector<Point_t*>& points)
 /**
    * Build the Octree
    */
@@ -277,7 +304,8 @@ void Octree::buildOctree(std::vector<Lpoint*>& points)
 	insertPoints(points);
 }
 
-std::vector<Lpoint*> Octree::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
 /**
  * @brief KNN algorithm. Returns the min(k, maxNeighs) nearest neighbors of a given point p
  * @param p
@@ -286,7 +314,7 @@ std::vector<Lpoint*> Octree::KNN(const Point& p, const size_t k, const size_t ma
  * @return
  */
 {
-	std::vector<Lpoint*>             knn{};
+	std::vector<Point_t*>             knn{};
 	std::unordered_map<size_t, bool> wasAdded{};
 
 	double r = 1.0;
@@ -300,7 +328,7 @@ std::vector<Lpoint*> Octree::KNN(const Point& p, const size_t k, const size_t ma
 		if (knn.size() + neighs.size() > nmax)
 		{ // Add all points if there is room for them
 			std::sort(neighs.begin(), neighs.end(),
-			          [&p](Lpoint* a, Lpoint* b) { return a->distance3D(p) < b->distance3D(p); });
+			          [&p](Point_t* a, Point_t* b) { return a->distance3D(p) < b->distance3D(p); });
 		}
 
 		for (const auto& n : neighs)
@@ -317,7 +345,8 @@ std::vector<Lpoint*> Octree::KNN(const Point& p, const size_t k, const size_t ma
 	return knn;
 }
 
-void Octree::writeOctree(std::ofstream& f, size_t index) const
+template <PointType Point_t>
+void Octree<Point_t>::writeOctree(std::ofstream& f, size_t index) const
 {
 	index++;
 	f << "Depth: " << index << " "
@@ -340,7 +369,8 @@ void Octree::writeOctree(std::ofstream& f, size_t index) const
 	}
 }
 
-void Octree::extractPoint(const Lpoint* p)
+template <PointType Point_t>
+void Octree<Point_t>::extractPoint(const Point_t* p)
 /**
  * Searches for p and (if found) removes it from the octree.
  *
@@ -371,7 +401,8 @@ void Octree::extractPoint(const Lpoint* p)
 	}
 }
 
-Lpoint* Octree::extractPoint()
+template <PointType Point_t>
+Point_t* Octree<Point_t>::extractPoint()
 /**
  * Searches for a point and, if it founds one, removes it from the octree.
  *
@@ -421,28 +452,31 @@ Lpoint* Octree::extractPoint()
 	return p;
 }
 
-void Octree::extractPoints(std::vector<Lpoint>& points)
+template <PointType Point_t>
+void Octree<Point_t>::extractPoints(std::vector<Point_t>& points)
 {
-	for (Lpoint& p : points)
+	for (Point_t& p : points)
 	{
 		extractPoint(&p);
 	}
 }
 
-void Octree::extractPoints(std::vector<Lpoint*>& points)
+template <PointType Point_t>
+void Octree<Point_t>::extractPoints(std::vector<Point_t*>& points)
 {
-	for (Lpoint* p : points)
+	for (Point_t* p : points)
 	{
 		extractPoint(p);
 	}
 }
 
-std::vector<Lpoint*> Octree::searchEraseCircleNeighbors(const std::vector<Lpoint*>& points, double radius)
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::searchEraseCircleNeighbors(const std::vector<Point_t*>& points, double radius)
 /*
  * Searches points' circle neighbors and erases them from the octree.
  */
 {
-	std::vector<Lpoint*> pointsNeighbors{};
+	std::vector<Point_t*> pointsNeighbors{};
 
 	for (const auto* p : points)
 	{
@@ -458,9 +492,10 @@ std::vector<Lpoint*> Octree::searchEraseCircleNeighbors(const std::vector<Lpoint
 	return pointsNeighbors;
 }
 
-std::vector<Lpoint*> Octree::searchEraseSphereNeighbors(const std::vector<Lpoint*>& points, float radius)
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vector<Point_t*>& points, float radius)
 {
-	std::vector<Lpoint*> pointsNeighbors{};
+	std::vector<Point_t*> pointsNeighbors{};
 
 	for (const auto* p : points)
 	{
@@ -477,10 +512,11 @@ std::vector<Lpoint*> Octree::searchEraseSphereNeighbors(const std::vector<Lpoint
 }
 
 /** Connected inside a spherical shell*/
-std::vector<Lpoint*> Octree::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
                                                            const float minRadius, const float maxRadius) const
 {
-	std::vector<Lpoint*> connectedShellNeighs;
+	std::vector<Point_t*> connectedShellNeighs;
 
 	auto connectedSphereNeighs = searchSphereNeighbors(point, maxRadius);
 	connectedSphereNeighs      = connectedNeighbors(&point, connectedSphereNeighs, nextDoorDistance);
@@ -493,15 +529,16 @@ std::vector<Lpoint*> Octree::searchConnectedShellNeighbors(const Point& point, c
 }
 
 /** Connected circle neighbors*/
-std::vector<Lpoint*> Octree::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
 {
-	std::vector<Lpoint*> connectedCircleNeighbors;
+	std::vector<Point_t*> connectedCircleNeighbors;
 
 	auto* p = extractPoint();
 	if (p == nullptr) { return connectedCircleNeighbors; }
 	connectedCircleNeighbors.push_back(p);
 
-	auto closeNeighbors = searchEraseCircleNeighbors(std::vector<Lpoint*>{ p }, nextDoorDistance);
+	auto closeNeighbors = searchEraseCircleNeighbors(std::vector<Point_t*>{ p }, nextDoorDistance);
 	while (!closeNeighbors.empty())
 	{
 		connectedCircleNeighbors.insert(connectedCircleNeighbors.end(), closeNeighbors.begin(), closeNeighbors.end());
@@ -511,7 +548,8 @@ std::vector<Lpoint*> Octree::searchEraseConnectedCircleNeighbors(const float nex
 	return connectedCircleNeighbors;
 }
 
-std::vector<Lpoint*> Octree::connectedNeighbors(const Point* point, std::vector<Lpoint*>& neighbors,
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::connectedNeighbors(const Point* point, std::vector<Point_t*>& neighbors,
                                                 const float nextDoorDistance)
 /**
 	 * Filters neighbors which are not connected to point through a chain of next-door neighbors. Erases neighbors in the
@@ -523,7 +561,7 @@ std::vector<Lpoint*> Octree::connectedNeighbors(const Point* point, std::vector<
 	 * @return
 	 */
 {
-	std::vector<Lpoint*> connectedNeighbors;
+	std::vector<Point_t*> connectedNeighbors;
 	if (neighbors.empty()) { return connectedNeighbors; }
 
 	auto waiting = extractCloseNeighbors(point, neighbors, nextDoorDistance);
@@ -541,7 +579,8 @@ std::vector<Lpoint*> Octree::connectedNeighbors(const Point* point, std::vector<
 	return connectedNeighbors;
 }
 
-std::vector<Lpoint*> Octree::extractCloseNeighbors(const Point* p, std::vector<Lpoint*>& neighbors, const float radius)
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, const float radius)
 /**
 	 * Fetches neighbors within radius from p, erasing them from neighbors and returning them.
 	 *
@@ -551,7 +590,7 @@ std::vector<Lpoint*> Octree::extractCloseNeighbors(const Point* p, std::vector<L
 	 * @return
 	 */
 {
-	std::vector<Lpoint*> closeNeighbors;
+	std::vector<Point_t*> closeNeighbors;
 
 	for (size_t i = 0; i < neighbors.size();)
 	{
@@ -566,7 +605,8 @@ std::vector<Lpoint*> Octree::extractCloseNeighbors(const Point* p, std::vector<L
 	return closeNeighbors;
 }
 
-std::vector<Lpoint*> Octree::kClosestCircleNeighbors(const Lpoint* p, const size_t k) const
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::kClosestCircleNeighbors(const Point_t* p, const size_t k) const
 /**
 	 * Fetches the (up to if not enough points in octree) k closest neighbors with respect to 2D-distance.
 	 *
@@ -577,7 +617,7 @@ std::vector<Lpoint*> Octree::kClosestCircleNeighbors(const Lpoint* p, const size
 {
 	double               rMin = SENSEPSILON * static_cast<double>(k);
 	const double         rMax = 2.0 * M_SQRT2 * radius_;
-	std::vector<Lpoint*> closeNeighbors;
+	std::vector<Point_t*> closeNeighbors;
 	for (closeNeighbors = searchCircleNeighbors(p, rMin); closeNeighbors.size() < k && rMin < 2 * rMax; rMin *= 2)
 	{
 		closeNeighbors = searchCircleNeighbors(p, rMin);
@@ -601,7 +641,8 @@ std::vector<Lpoint*> Octree::kClosestCircleNeighbors(const Lpoint* p, const size
 	return closeNeighbors;
 }
 
-std::vector<Lpoint*> Octree::nCircleNeighbors(const Lpoint* p, const size_t n, float& radius, const float minRadius,
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxIncrement,
                                               const float maxDecrement) const
 /**
@@ -629,7 +670,8 @@ std::vector<Lpoint*> Octree::nCircleNeighbors(const Lpoint* p, const size_t n, f
 	return neighs;
 }
 
-std::vector<Lpoint*> Octree::nSphereNeighbors(const Lpoint& p, const size_t n, float& radius, const float minRadius,
+template <PointType Point_t>
+std::vector<Point_t*> Octree<Point_t>::nSphereNeighbors(const Point_t& p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxStep) const
 /**
 	 * Radius-adaptive search method for sphere neighbors.

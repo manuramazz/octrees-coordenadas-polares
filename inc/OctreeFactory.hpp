@@ -1,35 +1,60 @@
 #pragma once
+
 #include "Lpoint.hpp"
+#include "Lpoint64.hpp"
+#include "point.hpp"
 #include "octree.hpp"
 #include "octree_linear.hpp"
 #include "octree_linear_old.hpp"
 
-enum class Octree_t 
-{
-	pointer,
-    linear,
-    linear_old
+#include <type_traits>
+
+// Types of octree
+enum class Octree_t {
+    pointer,
+    linear
 };
 
+template <PointType T>
+std::string getPointName();
 
-template <typename Octree_t>
+template <>
+std::string getPointName<Lpoint64>() {
+    return "Lpoint64";
+}
+
+template <>
+std::string getPointName<Lpoint>() {
+    return "Lpoint";
+}
+
+template <>
+std::string getPointName<Point>() {
+    return "Point";
+}
+
+
+// Get octree name along with its point type
+template <OctreeType Octree_t, PointType Point_t>
 std::string getOctreeName() {
-    if constexpr (std::is_same_v<Octree_t, LinearOctree>) {
-        return "linear";
-    } else if constexpr (std::is_same_v<Octree_t, Octree>) {
-        return "pointer";
-    } else if constexpr (std::is_same_v<Octree_t, LinearOctreeOld>) {
-        return "linearOld";
+    std::string pointTypeName = getPointName<Point_t>();
+    if constexpr (std::is_same_v<Octree_t, LinearOctree<Point_t>>) {
+        return "linear<" + pointTypeName + ">";
+    } else if constexpr (std::is_same_v<Octree_t, Octree<Point_t>>) {
+        return "pointer<" + pointTypeName + ">";
     } else {
-        return "Unknown";
+        static_assert(false, "Unsupported octree type in getOctreeName");
     }
 }
 
-template<Octree_t octree>
-inline auto octreeFactory(std::vector<Lpoint>& points)
-{
-	if constexpr (octree == Octree_t::pointer) { return Octree(points); }
-	else if constexpr (octree == Octree_t::linear) { return LinearOctree(points); }
-    else if constexpr (octree == Octree_t::linear_old) { return LinearOctreeOld(points); }
-	else { static_assert(false, "Unsupported Octree_t type in octreeFactory");  }
+// Build octree of a given type and point type
+template <Octree_t octree, PointType Point_t>
+inline auto octreeFactory(std::vector<Point_t>& points) {
+    if constexpr (octree == Octree_t::pointer) {
+        return Octree<Point_t>(points);
+    } else if constexpr (octree == Octree_t::linear) {
+        return LinearOctree<Point_t>(points);
+    } else {
+        static_assert(false, "Unsupported octree type in octreeFactory");
+    }
 }

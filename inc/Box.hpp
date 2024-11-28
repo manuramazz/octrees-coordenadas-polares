@@ -5,10 +5,10 @@
 #ifndef RULE_BASED_CLASSIFIER_CPP_BOX_HPP
 #define RULE_BASED_CLASSIFIER_CPP_BOX_HPP
 
-#include "Lpoint.hpp"
 #include "point.hpp"
 #include "util.hpp"
 #include <vector>
+
 
 class Box
 {
@@ -96,8 +96,9 @@ class Box
 };
 
 // Functions
-
-inline Point mbb(const std::vector<Lpoint>& points, Vector& maxRadius)
+template<typename Point_t>
+inline Point mbb(const std::vector<Point_t>& points, Vector& maxRadius)
+requires std::is_base_of_v<Point, Point_t>
 /**
  * Computes the minimum bounding box of a set of points
  * @param points Array of points
@@ -134,8 +135,9 @@ inline Point mbb(const std::vector<Lpoint>& points, Vector& maxRadius)
 	return midpoint(min, max);
 }
 
-
-inline Point mbb(const std::vector<Lpoint>& points, float& maxRadius)
+template<typename Point_t>
+inline Point mbb(const std::vector<Point_t>& points, float& maxRadius)
+requires std::is_base_of_v<Point, Point_t>
 /**
  * Computes the minimum bounding box of a set of points
  * @param points Array of points
@@ -172,7 +174,9 @@ inline Point mbb(const std::vector<Lpoint>& points, float& maxRadius)
 	return midpoint(min, max);
 }
 
-inline Point mbb(const std::vector<Lpoint*>& points, float& maxRadius)
+template<typename Point_t>
+inline Point mbb(const std::vector<Point_t*>& points, float& maxRadius)
+requires std::is_base_of_v<Point, Point_t>
 /**
  * Computes the minimum bounding box of a set of points
  * @param points Array of points' pointers
@@ -227,7 +231,7 @@ inline void makeBoxCylinder(const Point& p, double radius, Vector& min, Vector& 
 
 inline void makeBox(const Point& p, const Vector& radius, Vector& min, Vector& max)
 /**
-   * This functions defines the box whose inner points will be considered as neighs of Lpoint p.
+   * This functions defines the box whose inner points will be considered as neighs of Point p.
    * @param p
    * @param radius Vector of radius. One per spatial direction.
    * @param min
@@ -242,7 +246,7 @@ inline void makeBox(const Point& p, const Vector& radius, Vector& min, Vector& m
 	max.setZ(p.getZ() + radius.getZ());
 }
 
-inline bool insideBox2D(const Lpoint& point, const Vector& min, const Vector& max)
+inline bool insideBox2D(const Point& point, const Vector& min, const Vector& max)
 {
 	if (point.getX() > min.getX() && point.getY() > min.getY())
 	{
@@ -252,12 +256,12 @@ inline bool insideBox2D(const Lpoint& point, const Vector& min, const Vector& ma
 	return false;
 }
 
-inline bool insideCircle(const Lpoint& p, const Point& c, const double r)
+inline bool insideCircle(const Point& p, const Point& c, const double r)
 {
 	return (p.getX() - c.getX()) * (p.getX() - c.getX()) + (p.getY() - c.getY()) * (p.getY() - c.getY()) < r * r;
 }
 
-inline bool insideBox3D(const Lpoint& point, const Vector& min, const Vector& max)
+inline bool insideBox3D(const Point& point, const Vector& min, const Vector& max)
 {
 	if (point.getX() > min.getX() && point.getY() > min.getY() && point.getZ() > min.getZ())
 	{
@@ -266,7 +270,7 @@ inline bool insideBox3D(const Lpoint& point, const Vector& min, const Vector& ma
 	return false;
 }
 
-inline void makeBoxWithinHeights(const Lpoint& p, double radius, Vector& min, Vector& max, double zMin, double zMax)
+inline void makeBoxWithinHeights(const Point& p, double radius, Vector& min, Vector& max, double zMin, double zMax)
 {
 	min.setX(p.getX() - radius);
 	min.setY(p.getY() - radius);

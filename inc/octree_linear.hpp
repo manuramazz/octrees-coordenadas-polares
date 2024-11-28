@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Lpoint.hpp"
 #include "Box.hpp"
 #include <stack>
 #include <bitset>
@@ -30,6 +29,7 @@
 * @date 16/11/2024
 * 
 */
+template <PointType Point_t>
 class LinearOctree {
 private:
     /// @brief The maximum number of points in a leaf
@@ -104,7 +104,7 @@ private:
      * @details At the beginning of the octree construction, this points are encoded and then sorted in-place in the order given by their
      * encodings. Therefore, this array is altered inside this class. This is done to  locality that Morton/Hilbert
      */
-    std::vector<Lpoint> &points;
+    std::vector<Point_t> &points;
 
     /// @brief The encodings of the points in the octree
     std::vector<morton_t> codes;
@@ -414,6 +414,7 @@ private:
     }
 
 public:
+    using PointType = Point_t;
     LinearOctree() = default;
     
     /**
@@ -422,7 +423,7 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Lpoint> &points, bool printLog = true): points(points) {
+    explicit LinearOctree(std::vector<Point_t> &points, bool printLog = true): points(points) {
         if(printLog)
             std::cout << "Linear octree build summary:\n";
         double total_time = 0.0;
@@ -488,7 +489,7 @@ public:
      */
     void sortPoints() {
         // Temporal vector of pairs
-        std::vector<std::pair<morton_t, Lpoint>> encoded_points;
+        std::vector<std::pair<morton_t, Point_t>> encoded_points;
         encoded_points.reserve(points.size());
         for(size_t i = 0; i < points.size(); i++) {
             encoded_points.emplace_back(MortonEncoder::encodeMortonPoint(points[i], bbox), points[i]);
@@ -669,13 +670,13 @@ public:
      * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
      * @param k specific kernel that contains the data of the region (center and radius)
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @param root The morton code for the node to start (usually the tree root which is 0)
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
     template<typename Kernel, typename Function>
-    [[nodiscard]] std::vector<Lpoint*> neighbors(const Kernel& k, Function&& condition) const {
-        std::vector<Lpoint*> ptsInside;
+    [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k, Function&& condition) const {
+        std::vector<Point_t*> ptsInside;
         auto center_id = k.center().id();
 
         auto intersectsKernel = [&](uint32_t nodeIndex) {
@@ -686,7 +687,7 @@ public:
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Lpoint& p = this->points[j];  // Now we can get a non-const reference
+                Point_t& p = this->points[j];  // Now we can get a non-const reference
                 if (k.isInside(p) && center_id != p.id() && condition(p)) {
                     ptsInside.push_back(&p);
                 }
@@ -702,7 +703,7 @@ public:
      * @param p Center of the kernel to be used
      * @param radius Radius of the kernel to be used
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @return Points inside the given kernel
      */
 	template<typename Kernel, typename Function>
@@ -718,7 +719,7 @@ public:
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
             for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Lpoint& p = this->points[j];
+                Point_t& p = this->points[j];
                 if (k.isInside(p) && center_id != p.id() && condition(p)) {
                     ptsInside++;
                 }
@@ -736,8 +737,8 @@ public:
      * @param maxNeighs
      * @return
      */
-    std::vector<Lpoint*> KNN(const Point& p, const size_t k, const size_t maxNeighs) const {
-        std::vector<Lpoint*> knn{};
+    std::vector<Point_t*> KNN(const Point& p, const size_t k, const size_t maxNeighs) const {
+        std::vector<Point_t*> knn{};
         std::unordered_map<size_t, bool> wasAdded{};
 
         double r = 1.0;
@@ -752,7 +753,7 @@ public:
             // Add all the points if there is room for them on proximity order
             if (knn.size() + neighs.size() > nmax) {
                 std::sort(neighs.begin(), neighs.end(),
-                        [&p](Lpoint* a, Lpoint* b) { return a->distance3D(p) < b->distance3D(p); });
+                        [&p](Point_t* a, Point_t* b) { return a->distance3D(p) < b->distance3D(p); });
             }
 
             for (const auto& n : neighs)  {
@@ -773,11 +774,11 @@ public:
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		// Dummy condition that always returns true, so we can use the same function for all cases
 		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+		constexpr auto dummyCondition = [](const Point_t&) { return true; };
 		return neighbors(kernel, dummyCondition);
 	}
 	/**
@@ -787,11 +788,11 @@ public:
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::cube>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, const Vector& radii) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		// Dummy condition that always returns true, so we can use the same function for all cases
 		// The compiler should optimize this away
-		constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+		constexpr auto dummyCondition = [](const Point_t&) { return true; };
 		return neighbors(kernel, dummyCondition);
 	}
     /**
@@ -799,11 +800,11 @@ public:
      * @param p Center of the kernel to be used
      * @param radius Radius of the kernel to be used
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, double radius, Function&& condition) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius, Function&& condition) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
 		return neighbors(kernel, std::forward<Function&&>(condition));
 	}
@@ -813,11 +814,11 @@ public:
      * @param p Center of the kernel to be used
      * @param radii Radii of the kernel to be used
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @return Points inside the given kernel type
      */
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors(const Point& p, const Vector& radii,
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, const Vector& radii,
 	                                                          Function&& condition) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighbors(kernel, std::forward<Function&&>(condition));
@@ -830,13 +831,13 @@ public:
      * @param flags Vector of flags: return only points which flags[pointId] == false
      * @return Points inside the given kernel
      */
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const double radius,
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3D(const Point& p, const double radius,
 	                                                            const std::vector<bool>& flags) const {
 		const auto condition = [&](const Point& point) { return !flags[point.id()]; };
 		return searchNeighbors<Kernel_t::cube>(p, radius, condition);
 	}
 
-    [[nodiscard]] inline std::vector<Lpoint*> searchSphereNeighbors(const Point& point, const float radius) const {
+    [[nodiscard]] inline std::vector<Point_t*> searchSphereNeighbors(const Point& point, const float radius) const {
 		return searchNeighbors<Kernel_t::sphere>(point, radius);
 	}
 
@@ -847,7 +848,7 @@ public:
 	 * @param outerRingRadii Radii of the outer part of the ring
 	 * @return The points located between the inner ring and the outer ring
 	 */
-	[[nodiscard]] std::vector<Lpoint*> searchNeighborsRing(const Lpoint& p, const Vector& innerRingRadii,
+	[[nodiscard]] std::vector<Point_t*> searchNeighborsRing(const Point_t& p, const Vector& innerRingRadii,
 	                                                       const Vector& outerRingRadii) const {
 		// Search points within "outerRingRadii"
 		const auto outerKernel = kernelFactory<Kernel_t::cube>(p, outerRingRadii);
@@ -859,29 +860,29 @@ public:
 	}
 
     // Other search functions
-    [[nodiscard]] inline std::vector<Lpoint*> searchNeighbors2D(const Point& p, const double radius) const {
+    [[nodiscard]] inline std::vector<Point_t*> searchNeighbors2D(const Point& p, const double radius) const {
 		return searchNeighbors<Kernel_t::square>(p, radius);
 	}
 
-	[[nodiscard]] inline std::vector<Lpoint*> searchCylinderNeighbors(const Lpoint& p, const double radius,
+	[[nodiscard]] inline std::vector<Point_t*> searchCylinderNeighbors(const Point_t& p, const double radius,
 	                                                                  const double zMin, const double zMax) const {
 		return searchNeighbors<Kernel_t::circle>(p, radius,
-		                                         [&](const Lpoint& p) { return p.getZ() >= zMin && p.getZ() <= zMax; });
+		                                         [&](const Point_t& p) { return p.getZ() >= zMin && p.getZ() <= zMax; });
 	}
 
-	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint& p, const double radius) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchCircleNeighbors(const Point_t& p, const double radius) const {
 		return searchNeighbors<Kernel_t::circle>(p, radius);
 	}
 
-	[[nodiscard]] inline std::vector<Lpoint*> searchCircleNeighbors(const Lpoint* p, const double radius) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchCircleNeighbors(const Point_t* p, const double radius) const {
 		return searchCircleNeighbors(*p, radius);
 	}
 
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, const Vector& radii) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3D(const Point& p, const Vector& radii) const {
 		return searchNeighbors<Kernel_t::cube>(p, radii);
 	}
 
-	[[nodiscard]] inline std::vector<Lpoint*> searchNeighbors3D(const Point& p, double radius) const {
+	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors3D(const Point& p, double radius) const {
 		return searchNeighbors<Kernel_t::cube>(p, radius);
 	}
 
@@ -894,7 +895,7 @@ public:
     template<Kernel_t kernel_type = Kernel_t::square>
 	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius) const {
 		const auto kernel = kernelFactory<kernel_type>(p, radius);
-        constexpr auto dummyCondition = [](const Lpoint&) { return true; };
+        constexpr auto dummyCondition = [](const Point_t&) { return true; };
 		return numNeighbors(kernel, dummyCondition);
 	}
 	/**
@@ -902,7 +903,7 @@ public:
      * @param p Center of the kernel to be used
      * @param radius Radius of the kernel to be used
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const Lpoint &p);`
+     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
      * @return Points inside the given kernel
      */
 	template<Kernel_t kernel_type = Kernel_t::square, class Function>
