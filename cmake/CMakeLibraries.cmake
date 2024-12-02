@@ -42,7 +42,7 @@ endif ()
 # LASlib
 find_package(LASLIB REQUIRED)
 if (${LASLIB_FOUND})
-  include_directories(${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR_2})
+  include_directories(${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR})
     message(STATUS "LASlib include: ${LASLIB_INCLUDE_DIR} ${LASZIP_INCLUDE_DIR}")
 else ()
     message(SEND_ERROR "Could not find LASLIB")

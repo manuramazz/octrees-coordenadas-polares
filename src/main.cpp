@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 // Global benchmark parameters
 const std::vector<float> benchmarkRadii = {0.5, 1.0, 2.5, 5.0, 10.0};
 constexpr size_t repeats = 5;
-constexpr size_t numSearches = 1000;
+constexpr size_t numSearches = 20;
 
 template <typename T>
 void checkVectorMemory(std::vector<T> vec) {
@@ -71,36 +71,36 @@ void octreeComparisonBenchmark(std::ofstream &outputFile, bool check = false) {
   }
 }
 
-template <OctreeType Octree_t, PointType Point_t>
-void buildAndRunSimpleBenchmark(std::ofstream &outputFile, std::vector<Point_t> &points, std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree_t, Point_t> ob(points, numSearches, searchSet, outputFile, false, comment);
-  for(int i = 0; i<benchmarkRadii.size(); i++){
-    float radius = benchmarkRadii[i];
-    ob.template benchmarkSearchNeigh<Kernel_t::sphere>(repeats, radius);
-    ob.template benchmarkNumNeigh<Kernel_t::sphere>(repeats, radius);
-    std::cout << getCurrentDate() << " (" << i+1 << "/" << benchmarkRadii.size() << ") Benchmark with radius " << benchmarkRadii[i] << " completed" << std::endl;
-  }
-}
+// template <OctreeType Octree_t, PointType Point_t>
+// void buildAndRunSimpleBenchmark(std::ofstream &outputFile, std::vector<Point_t> &points, std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
+//   OctreeBenchmark<Octree_t, Point_t> ob(points, numSearches, searchSet, outputFile, false, comment);
+//   for(int i = 0; i<benchmarkRadii.size(); i++){
+//     float radius = benchmarkRadii[i];
+//     ob.template benchmarkSearchNeigh<Kernel_t::sphere>(repeats, radius);
+//     ob.template benchmarkNumNeigh<Kernel_t::sphere>(repeats, radius);
+//     std::cout << getCurrentDate() << " (" << i+1 << "/" << benchmarkRadii.size() << ") Benchmark with radius " << benchmarkRadii[i] << " completed" << std::endl;
+//   }
+// }
 
-template <PointType Point_t>
-void octreeSimpleBenchmark(std::ofstream &outputFile) {
-  // For bigger datasets
-  TimeWatcher tw;
-  tw.start();
-  auto points = readPointCloud<Point_t>(mainOptions.inputFile);
-  tw.stop();
+// template <PointType Point_t>
+// void octreeSimpleBenchmark(std::ofstream &outputFile) {
+//   // For bigger datasets
+//   TimeWatcher tw;
+//   tw.start();
+//   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
+//   tw.stop();
 
-  std::cout << "Number of read points: " << points.size() << "\n";
-  std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
-            << " seconds\n";
-  checkVectorMemory(points);
+//   std::cout << "Number of read points: " << points.size() << "\n";
+//   std::cout << "Time to read points: " << tw.getElapsedDecimalSeconds()
+//             << " seconds\n";
+//   checkVectorMemory(points);
 
-  std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(numSearches, points);
-  std::cout << "Running benchmarks on octree " << getOctreeName<Octree<Point_t>, Point_t>() << std::endl;
-  buildAndRunSimpleBenchmark<Octree<Point_t>, Point_t>(outputFile, points, searchSet, "unsorted");
-  std::cout << "Running benchmarks on octree " << getOctreeName<LinearOctree<Point_t>, Point_t>() << std::endl;
-  buildAndRunSimpleBenchmark<LinearOctree<Point_t>, Point_t>(outputFile, points, searchSet);
-}
+//   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(numSearches, points);
+//   std::cout << "Running benchmarks on octree " << getOctreeName<Octree<Point_t>, Point_t>() << std::endl;
+//   buildAndRunSimpleBenchmark<Octree<Point_t>, Point_t>(outputFile, points, searchSet, "unsorted");
+//   std::cout << "Running benchmarks on octree " << getOctreeName<LinearOctree<Point_t>, Point_t>() << std::endl;
+//   buildAndRunSimpleBenchmark<LinearOctree<Point_t>, Point_t>(outputFile, points, searchSet);
+// }
 
 
 int main(int argc, char *argv[]) {

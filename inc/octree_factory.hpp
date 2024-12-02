@@ -42,8 +42,6 @@ std::string getOctreeName() {
         return "linear <" + pointTypeName + ">";
     } else if constexpr (std::is_same_v<Octree_t, Octree<Point_t>>) {
         return "pointer <" + pointTypeName + ">";
-    } else {
-        static_assert(false, "Unsupported octree type in getOctreeName");
     }
 }
 
@@ -54,7 +52,5 @@ inline auto octreeFactory(std::vector<Point_t>& points) {
         return Octree<Point_t>(points);
     } else if constexpr (octree == Octree_t::linear) {
         return LinearOctree<Point_t>(points);
-    } else {
-        static_assert(false, "Unsupported octree type in octreeFactory");
     }
 }

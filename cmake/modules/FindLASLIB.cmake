@@ -13,7 +13,7 @@ find_path(LASZIP_INCLUDE_DIR
 
 find_path(LASZIP_INCLUDE_DIR_2
         laszip_common.h
-        HINTS ${CMAKE_SOURCE_DIR}/lib/LAStools/LASzip/include/laszip)
+        HINTS ${CMAKE_SOURCE_DIR}/lidb/LAStools/LASzip/include/laszip)
 
 if (LASLIB_INCLUDE_DIR)
     find_library(LASLIB_LIBRARY
