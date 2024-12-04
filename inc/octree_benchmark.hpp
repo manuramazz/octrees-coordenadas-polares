@@ -167,6 +167,14 @@ class OctreeBenchmark {
             oct = std::make_unique<Octree_t>(points); 
         }
 
+        #pragma GCC push_options
+        #pragma GCC optimize("O0")
+        void preventOptimization(size_t value) {
+            volatile size_t* dummy = &value;
+            (void) *dummy;
+        }
+        #pragma GCC pop_options
+        
         template<Kernel_t kernel>
         void searchNeighParallel(float radii) {
             if(check && resultSet->resultsNeigh.empty())
@@ -190,7 +198,7 @@ class OctreeBenchmark {
                     if(check) {
                         resultSet->resultsNumNeigh[i] = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
                     } else {
-                        volatile auto result =  oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+                        preventOptimization(oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii));
                     }
                 }
         }
@@ -203,7 +211,7 @@ class OctreeBenchmark {
                     if(check) {
                         resultSet->resultsKNN[i] = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     } else {
-                        volatile auto result =  oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
+                        volatile auto result = oct->template KNN(searchSet->searchPoints[i], searchSet->searchKNNLimits[i], searchSet->searchKNNLimits[i]);
                     }
                 }
         }

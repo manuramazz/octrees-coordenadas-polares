@@ -18,7 +18,7 @@
 namespace fs = std::filesystem;
 
 // Global benchmark parameters
-const std::vector<float> BENCHMARK_RADII = {0.5, 1.0, 2.5, 5.0, 10.0};
+const std::vector<float> BENCHMARK_RADII = {2.5, 5.0, 7.5, 10.0};
 constexpr size_t REPEATS = 5;
 constexpr size_t NUM_SEARCHES = 1000;
 constexpr bool CHECK_RESULTS = false;
@@ -37,11 +37,12 @@ void checkVectorMemory(std::vector<T> vec) {
     }
 }
 
-template <OctreeType Octree_t, PointType Point_t>
+template <template <typename> class Octree_t, typename Point_t>
+requires OctreeType<Octree_t<Point_t>>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
   std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree<Point_t>, Point_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
-  OctreeBenchmark<Octree<Point_t>, Point_t>::runFullBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t> ob(points, NUM_SEARCHES, searchSet, outputFile, CHECK_RESULTS, comment);
+  OctreeBenchmark<Octree_t<Point_t>, Point_t>::runFullBenchmark(ob, BENCHMARK_RADII, REPEATS, NUM_SEARCHES);
   return ob.getResultSet();
 }
 
@@ -61,9 +62,9 @@ void octreeComparisonBenchmark(std::ofstream &outputFile) {
   // Generate a shared search set for each benchmark execution
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(NUM_SEARCHES, points);
 
-  auto resultsPointer = buildAndRunBenchmark<Octree<Point_t>, Point_t>(outputFile, points, searchSet, "unsorted");
-  auto resultsLinear = buildAndRunBenchmark<LinearOctree<Point_t>, Point_t>(outputFile, points, searchSet);
-  auto resultsPointerSorted = buildAndRunBenchmark<Octree<Point_t>, Point_t>(outputFile, points, searchSet, "sorted");
+  auto resultsPointer = buildAndRunBenchmark<Octree>(outputFile, points, searchSet, "unsorted");
+  auto resultsLinear = buildAndRunBenchmark<LinearOctree>(outputFile, points, searchSet);
+  auto resultsPointerSorted = buildAndRunBenchmark<Octree>(outputFile, points, searchSet, "sorted");
 
   // Check the results if needed
   if(CHECK_RESULTS) {
