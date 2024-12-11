@@ -11,8 +11,8 @@
 #include <random>
 #include "NeighborKernels/KernelFactory.hpp"
 #include "octree_benchmark.hpp"
-#include "Lpoint.hpp"
-#include "Lpoint64.hpp"
+#include "Geometry/Lpoint.hpp"
+#include "Geometry/Lpoint64.hpp"
 #include <new>
 
 namespace fs = std::filesystem;

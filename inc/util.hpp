@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include "point.hpp"
+#include "Geometry/point.hpp"
 #include <algorithm>
 #include <numbers>
 #include <numeric>

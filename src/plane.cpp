@@ -2,8 +2,8 @@
 // Created by silvia.rodriguez.alcaraz on 26/2/21.
 //
 
-#include "plane.hpp"
-#include "geometry.hpp"
+#include "Geometry/plane.hpp"
+#include "Geometry/geometry.hpp"
 #include "util.hpp"
 
 Plane::Plane(const Vector& normal, const Point& centroid)

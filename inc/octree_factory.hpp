@@ -1,11 +1,10 @@
 #pragma once
 
-#include "Lpoint.hpp"
-#include "Lpoint64.hpp"
-#include "point.hpp"
+#include "Geometry/Lpoint.hpp"
+#include "Geometry/Lpoint64.hpp"
+#include "Geometry/point.hpp"
 #include "octree.hpp"
 #include "octree_linear.hpp"
-#include "octree_linear_old.hpp"
 
 #include <type_traits>
 

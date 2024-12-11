@@ -10,14 +10,14 @@
 // is encoded into the leafs.
 #pragma once
 
-#include "Lpoint.hpp"
-#include "Box.hpp"
+#include "Geometry/Lpoint.hpp"
+#include "Geometry/Box.hpp"
 #include <stack>
 #include <bitset>
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
-#include "libmorton/morton.h"
+#include "PointEncoding/libmorton/morton.h"
 #include "octree_linear_old_node.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"

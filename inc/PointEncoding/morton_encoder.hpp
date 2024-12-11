@@ -1,8 +1,8 @@
 #pragma once
 
 #include "libmorton/morton.h"
-#include "point.hpp"
-#include "Box.hpp"
+#include "Geometry/point.hpp"
+#include "Geometry/Box.hpp"
 
 using morton_t = uint_fast64_t;
 using coords_t = uint_fast32_t;

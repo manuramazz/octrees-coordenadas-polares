@@ -4,13 +4,13 @@
 
 #include "octree.hpp"
 
-#include "Box.hpp"
+#include "Geometry/Box.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 
 #include <algorithm>
 #include <unordered_map>
-#include "Lpoint.hpp"
-#include "Lpoint64.hpp"
+#include "Geometry/Lpoint.hpp"
+#include "Geometry/Lpoint64.hpp"
 
 // TODO: move this implementations to octree.hpp so we dont need to predefine all the point types we need
 template class Octree<Lpoint>;

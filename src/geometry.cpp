@@ -3,8 +3,8 @@
 //
 
 #include "armadillo"
-#include "geometry.hpp"
-#include "Lpoint.hpp"
+#include "Geometry/geometry.hpp"
+#include "Geometry/Lpoint.hpp"
 
 using namespace arma;
 

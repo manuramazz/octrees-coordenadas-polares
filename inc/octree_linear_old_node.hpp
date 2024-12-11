@@ -3,7 +3,7 @@
  * 
  */
 #pragma once
-#include "Lpoint.hpp"
+#include "Geometry/Lpoint.hpp"
 
 // Here we also define a couple shorthands for the integers used in morton encoding
 using morton_t = uint_fast64_t;

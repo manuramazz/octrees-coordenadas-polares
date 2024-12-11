@@ -9,7 +9,7 @@
 #include "KernelCube.hpp"
 #include "KernelSphere.hpp"
 #include "KernelSquare.hpp"
-#include "point.hpp"
+#include "Geometry/point.hpp"
 
 #include <memory>
 

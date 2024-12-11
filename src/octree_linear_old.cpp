@@ -5,7 +5,7 @@
 #include "octree_linear_old.hpp"
 #include "octree_linear_old_node.hpp"
 
-#include "Box.hpp"
+#include "Geometry/Box.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 
 #include <algorithm>

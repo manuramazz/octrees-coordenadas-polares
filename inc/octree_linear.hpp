@@ -1,16 +1,16 @@
 #pragma once
 
-#include "Box.hpp"
+#include "Geometry/Box.hpp"
 #include <stack>
 #include <bitset>
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
-#include "libmorton/morton.h"
+#include "PointEncoding/libmorton/morton.h"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
-#include "morton_encoder.hpp"
-#include "Box.hpp"
+#include "PointEncoding/morton_encoder.hpp"
+#include "Geometry/Box.hpp"
 
 /**
 * @class LinearOctree

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "point.hpp"
+#include "Geometry/point.hpp"
 
 class KernelAbstract
 /**
