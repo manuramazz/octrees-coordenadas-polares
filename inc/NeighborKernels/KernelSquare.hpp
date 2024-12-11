@@ -26,26 +26,59 @@ class KernelSquare : public Kernel2D
 	}
 
 	/**
-	 * @brief For the boxInside functions, we check if the volume passed is inside the bounding box of the square
+	 * @brief For the boxIntersect functions, we check if the box passed is inside,
+	 * overlaps or is outside the bounding box of the square kernel
+	 * 
+	 * @returns IntersectionJudgement, a enum value signaling each of the three conditions
 	*/
-	[[nodiscard]] bool boxInside(const Point& center, const double radius) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const double radius) const override
 	{
-		// Passed box xy boundaries
-		auto maxX = center.getX() + radius, minX = center.getX() - radius;
-		auto maxY = center.getY() + radius, minY = center.getY() - radius;
-		// Check everything is inside
-		return maxX <= boxMax().getX() && minX >= boxMin().getX() &&
-			   maxY <= boxMax().getY() && minY >= boxMin().getY(); 
+		// Box bounds
+		const double highX = center.getX() + radius, lowX = center.getX() - radius;
+		const double highY = center.getY() + radius, lowY = center.getY() - radius;
+
+		// Kernel bounds
+		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX(); 
+		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY();
+
+		// Check if box is definitely outside the kernel (like in boxOverlap)
+		if (highX < boxMinX || highY < boxMinY ||
+			lowX > boxMaxX 	|| lowY > boxMaxY) { 
+			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
+		}
+		
+		// Check if everything is inside
+		if(highX <= boxMaxX && highY <= boxMaxY &&
+		   lowX >= boxMinX 	&& lowY >= boxMinY) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
 
-	[[nodiscard]] bool boxInside(const Point& center, const Vector& radii) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const Vector& radii) const override
 	{
-		// Passed box xy boundaries
-		auto maxX = center.getX() + radii.getX(), minX = center.getX() - radii.getX();
-		auto maxY = center.getY() + radii.getY(), minY = center.getY() - radii.getY();
-		// Check everything is inside
-		return maxX < boxMax().getX() && minX > boxMin().getX() &&
-			   maxY < boxMax().getY() && minY > boxMin().getY(); 
+		// Box bounds
+		const double highX = center.getX() + radii.getX(), lowX = center.getX() - radii.getX();
+		const double highY = center.getY() + radii.getY(), lowY = center.getY() - radii.getY();
+
+		// Kernel bounds
+		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX();
+		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY(); 
+
+		// Check if box is definitely outside the kernel (like in boxOverlap)
+		if (highX < boxMinX || highY < boxMinY ||
+			lowX > boxMaxX 	|| lowY > boxMaxY) { 
+			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
+		}
+		
+		// Check if everything is inside
+		if(highX <= boxMaxX && highY <= boxMaxY &&
+		   lowX >= boxMinX 	&& lowY >= boxMinY) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
 };
 

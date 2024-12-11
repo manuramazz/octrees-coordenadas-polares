@@ -18,6 +18,13 @@ class KernelAbstract
 	Point  boxMax_{}; // Max Point_t of the Bounding Cube around the given kernel
 
 	public:
+
+	enum class IntersectionJudgement {
+		OUTSIDE = 0,
+		OVERLAP = 1,
+		INSIDE = 2
+	};
+
 	KernelAbstract(const Point& center, const double radius) : center_(center), radii_({ radius, radius, radius })
 	{
 		makeBox();
@@ -49,6 +56,6 @@ class KernelAbstract
 	[[nodiscard]] virtual bool boxOverlap(const Point& center, const Vector& radii) const = 0;
 	
 	// Checks if box is entirely within kernel
-	[[nodiscard]] virtual bool boxInside(const Point& center, double radius) const = 0;
-	[[nodiscard]] virtual bool boxInside(const Point& center, const Vector& radii) const = 0;
+	[[nodiscard]] virtual IntersectionJudgement boxIntersect(const Point& center, double radius) const = 0;
+	[[nodiscard]] virtual IntersectionJudgement boxIntersect(const Point& center, const Vector& radii) const = 0;
 };

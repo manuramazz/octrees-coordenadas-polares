@@ -752,47 +752,44 @@ public:
     [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
         std::vector<Point_t*> ptsInside;
         auto center_id = k.center().id();
-
-        auto overlapsOrContainsKernel = [&](uint32_t nodeIndex) {
+        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-            // First, check if node is entirely contained within bounds. If it is, we
-            // can just add all the points (EXCEPT THE CENTER)
-            // TODO: this is quite slow for some reason, needs optimizations
-            if(k.boxInside(nodeCenter, nodeRadii)) {
-                size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-                size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                ptsInside.reserve(ptsInside.size() + (endIndex - startIndex));
-
-                for (size_t i = startIndex; i < endIndex; ++i) {
-                    if (center_id != this->points[i].id()) {  // Exclude the center point
-                        ptsInside.push_back(&this->points[i]);
+            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+                case KernelAbstract::IntersectionJudgement::INSIDE: {
+                    // Completely inside, all add points except center and prune
+                    size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+                    size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+                    for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; it++) {
+                        if ((*it).id() != center_id) {
+                            ptsInside.push_back(&(*it));
+                        }
                     }
+                    return false;
                 }
-                return false;
+                case KernelAbstract::IntersectionJudgement::OVERLAP:
+                    // Overlaps but not inside, keep descending
+                    return true;
+                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
+                    // Completely outside, prune
+                    return false;
+                default:
+                    return false;
             }
-
-            // If not, check if it intersects the kernel, then we will descend
-            if(k.boxOverlap(nodeCenter, nodeRadii)) {
-                return true;
-            }
-            
-            // If we are completely outside, we prune
-            return false;
         };
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
-            for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Point_t& p = this->points[j];  // Now we can get a non-const reference
-                if (k.isInside(p) && center_id != p.id()) {
-                    ptsInside.push_back(&p);
+            auto start = this->points.begin() + this->layout[leafIdx];
+            auto end = this->points.begin() + this->layout[leafIdx+1];
+            for (auto it = start; it != end; it++) {
+                if (k.isInside(*it) && (*it).id() != center_id) {
+                    ptsInside.push_back(&(*it));
                 }
             }
         };
         
-        singleTraversal(overlapsOrContainsKernel, findAndInsertPoints);
+        singleTraversal(checkBoxIntersect, findAndInsertPoints);
         return ptsInside;
 	}
 
@@ -806,45 +803,39 @@ public:
 	template<typename Kernel>
 	[[nodiscard]] size_t numNeighbors(const Kernel& k) const {
         size_t ptsInside = 0;
-        auto center_id = k.center().id();
-        bool subtractCenter = true;
-        auto overlapsOrContainsKernel = [&](uint32_t nodeIndex) {
+        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-            // First, check if node is entirely contained within bounds. If it is, we
-            // can just add all the points
-            if(k.boxInside(nodeCenter, nodeRadii)) {
-                ptsInside += this->internalCounts[nodeIndex];
-                return false;
+            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+                case KernelAbstract::IntersectionJudgement::INSIDE:
+                    // Completely inside, all add points except center and prune
+                    ptsInside += this->internalCounts[nodeIndex];
+                    return false;
+                case KernelAbstract::IntersectionJudgement::OVERLAP:
+                    // Overlaps but not inside, keep descending
+                    return true;
+                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
+                    // Completely outside, prune
+                    return false;
+                default:
+                    return false;
             }
-
-            // If not, check if it intersects the kernel, then we will descend
-            if(k.boxOverlap(nodeCenter, nodeRadii)) {
-                return true;
-            }
-            // If we are completely outside, we prune
-            return false;
         };
         
         auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
-            for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Point_t& p = this->points[j];
-                // If we find the center here, we don't need to subtract one at the end
-                if(center_id == p.id()) {
-                    subtractCenter = false;
-                    continue;
-                }
-                if (k.isInside(p)) {
+            auto start = this->points.begin() + this->layout[leafIdx];
+            auto end = this->points.begin() + this->layout[leafIdx+1];
+            for (auto it = start; it != end; it++) {
+                if (k.isInside(*it)) {
                     ptsInside++;
                 }
             }
         };
-        
-        singleTraversal(overlapsOrContainsKernel, findAndIncrementPointsCount);
-        // If we added the center via boxInside check, we subtract it from the final count
-        if(subtractCenter) ptsInside--;
+        singleTraversal(checkBoxIntersect, findAndIncrementPointsCount);
+
+        // Subtract the center from the final count
+        ptsInside--;
         return ptsInside;
 	}
 

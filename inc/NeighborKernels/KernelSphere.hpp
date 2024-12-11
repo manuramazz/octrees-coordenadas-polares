@@ -29,28 +29,74 @@ class KernelSphere : public Kernel3D
 	}
 
 	/**
-	 * @brief For the boxInside functions, we find the furthest corner of the passed box
+	 * @brief For the boxOverlap functions, we find the furthest corner of the passed box
 	 * from the kernel center and check if it is inside. We don't have to test the other corners, since
 	 * they will always be inside because of the sphere definition.
 	*/
-	[[nodiscard]] bool boxInside(const Point& c, const double radius) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const double radius) const override
 	{
-		Point furthest = Point(
-			center().getX() + ( c.getX() > center().getX() ? radius : -radius ),
-			center().getY() + ( c.getY() > center().getY() ? radius : -radius ),
-			center().getZ() + ( c.getZ() > center().getZ() ? radius : -radius ));
+		// Box bounds
+		const double highX = center.getX() + radius, lowX = center.getX() - radius;
+		const double highY = center.getY() + radius, lowY = center.getY() - radius;
+		const double highZ = center.getZ() + radius, lowZ = center.getZ() - radius;
 
-		return isInside(furthest);
+		// Kernel bounds
+		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX(); 
+		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY();
+		const double boxMaxZ = boxMax().getZ(), boxMinZ = boxMin().getZ();
+
+		// Check if box is definitely outside the kernel (like in boxOverlap)
+		if (highX < boxMinX || highY < boxMinY 	|| highZ < boxMinZ || 
+			lowX > boxMaxX 	|| lowY > boxMaxY 	|| lowZ > boxMaxZ) { 
+			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
+		}
+	
+		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
+		// sphere	
+		Point furthest = Point(
+			( this->center().getX() > center.getX() ? highX : lowX ),
+			( this->center().getY() > center.getY() ? highY : lowY ),
+			( this->center().getZ() > center.getZ() ? highZ : lowZ ));
+		if(isInside(furthest)) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		// Otherwise, the box may overlap the sphere 
+		// (this can give false positives but that is ok for octree traversal purposes) 
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
 
-	[[nodiscard]] bool boxInside(const Point& c, const Vector& radii) const override
+	[[nodiscard]] IntersectionJudgement boxIntersect(const Point& center, const Vector &radii) const override
 	{
-		Point furthest = Point(
-			center().getX() + ( c.getX() > center().getX() ? radii.getX() : -radii.getX() ),
-			center().getY() + ( c.getY() > center().getY() ? radii.getY() : -radii.getY() ),
-			center().getZ() + ( c.getZ() > center().getZ() ? radii.getZ() : -radii.getZ() ));
+		// Box bounds
+		const double highX = center.getX() + radii.getX(), lowX = center.getX() - radii.getX();
+		const double highY = center.getY() + radii.getY(), lowY = center.getY() - radii.getY();
+		const double highZ = center.getZ() + radii.getZ(), lowZ = center.getZ() - radii.getZ();
 
-		return isInside(furthest);
+		// Kernel bounds
+		const double boxMaxX = boxMax().getX(), boxMinX = boxMin().getX(); 
+		const double boxMaxY = boxMax().getY(), boxMinY = boxMin().getY();
+		const double boxMaxZ = boxMax().getZ(), boxMinZ = boxMin().getZ();
+
+		// Check if box is definitely outside the kernel (like in boxOverlap)
+		if (highX < boxMinX || highY < boxMinY 	|| highZ < boxMinZ || 
+			lowX > boxMaxX 	|| lowY > boxMaxY 	|| lowZ > boxMaxZ) { 
+			return KernelAbstract::IntersectionJudgement::OUTSIDE; 
+		}
+		
+		// Check if the furthest point from the center of the box is inside sphere -> the box is inside the
+		// sphere
+		Point furthest = Point(
+			( this->center().getX() < center.getX() ? highX : lowX ),
+			( this->center().getY() < center.getY() ? highY : lowY ),
+			( this->center().getZ() < center.getZ() ? highZ : lowZ ));
+		if(isInside(furthest)) {
+			return KernelAbstract::IntersectionJudgement::INSIDE;
+		}
+
+		// Otherwise, the box may overlap the sphere 
+		// (this can give false positives but that is ok for octree traversal purposes) 
+		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
 };
 

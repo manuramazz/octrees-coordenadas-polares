@@ -20,7 +20,7 @@ namespace fs = std::filesystem;
 // Global benchmark parameters
 const std::vector<float> BENCHMARK_RADII = {0.5, 1.0, 2.5, 5.0};
 constexpr size_t REPEATS = 5;
-constexpr size_t NUM_SEARCHES = 1000;
+constexpr size_t NUM_SEARCHES = 10000;
 constexpr bool CHECK_RESULTS = false;
 
 template <typename T>
