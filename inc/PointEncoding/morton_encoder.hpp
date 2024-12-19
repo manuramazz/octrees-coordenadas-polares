@@ -21,8 +21,6 @@ namespace PointEncoding {
     struct MortonEncoder64 {
         using key_t = uint_fast64_t;
         using coords_t = uint_fast32_t;
-
-        static constexpr const char* NAME = "MortonEncoder64";
         
         /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 3 bits for each level, so 21)
         static constexpr unsigned MAX_DEPTH = 21;
@@ -38,10 +36,7 @@ namespace PointEncoding {
 
         // This methods should not be called from the outside, as they use geometric information computed here
         // (radii and center) of the point cloud
-        static inline key_t encode(const Point& p, const Box &bbox) {
-            // Utility method combining the two above
-            coords_t x, y, z;
-            PointEncoding::getAnchorCoords<MortonEncoder64>(p, bbox, x, y, z);
+        static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             return libmorton::morton3D_64_encode(x, y, z);
         }
 
@@ -54,8 +49,6 @@ namespace PointEncoding {
     struct MortonEncoder32 {
         using key_t = uint_fast32_t;
         using coords_t = uint_fast16_t;
-
-        static constexpr const char* NAME = "MortonEncoder32";
         
         /// @brief The maximum depth that this encoding allows (in Morton 32 bit integers, we need 3 bits for each level, so 10)
         static constexpr unsigned MAX_DEPTH = 10;
@@ -71,10 +64,7 @@ namespace PointEncoding {
 
         // This methods should not be called from the outside, as they use geometric information computed here
         // (radii and center) of the point cloud
-        static inline key_t encode(const Point& p, const Box &bbox) {
-            // Utility method combining the two above
-            coords_t x, y, z;
-            PointEncoding::getAnchorCoords<MortonEncoder32>(p, bbox, x, y, z);
+        static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             return libmorton::morton3D_32_encode(x, y, z);
         }
 

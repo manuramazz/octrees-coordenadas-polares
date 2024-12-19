@@ -4,28 +4,22 @@
 #include "Geometry/point.hpp"
 #include "Geometry/Box.hpp"
 #include "common.hpp"
+#include <bitset>
 
 namespace PointEncoding {
     /**
     * @struct HilbertEncoder64
     * 
-    * @brief
-    * 
-    * @cit
-    * 
-    * @authors Pablo Díaz Viñambres 
-    * 
     * @date 11/12/2024
     * 
+    * @cite https://doi.org/10.1016/j.newast.2016.10.007
     */
     struct HilbertEncoder64 {
-        using key_t = uint_fast64_t;
-        using coords_t = uint_fast32_t;
-
-        static constexpr const char* NAME = "HilbertEncoder64";
-        
+        using key_t = uint64_t;
+        using coords_t = uint32_t;
+                
         /// @brief The maximum depth that this encoding allows (in Morton 64 bit integers, we need 3 bits for each level, so 21)
-        static constexpr unsigned MAX_DEPTH = 21;
+        static constexpr uint32_t MAX_DEPTH = 21;
 
         /// @brief The minimum unit of length of the encoded coordinates
         static constexpr double EPS = 1.0f / (1 << MAX_DEPTH);
@@ -36,15 +30,69 @@ namespace PointEncoding {
         /// @brief The amount of bits that are not used, in Morton encodings this is the MSB of the key
         static constexpr uint32_t UNUSED_BITS = 1;
 
+        static constexpr coords_t mortonToHilbert[8] = {0, 1, 3, 2, 7, 6, 4, 5};
+            
         // This methods should not be called from the outside, as they use geometric information computed here
         // (radii and center) of the point cloud
-        static inline key_t encode(const Point& p, const Box &bbox) {
-            // TODO
-            return key_t(0);
+        static inline key_t encode(coords_t x, coords_t y, coords_t z) {
+            key_t key = 0;
+            for(int level = MAX_DEPTH - 1; level >= 0; level--) {
+                // Find octant and append to the key
+                const coords_t xi = (x >> level) & 1u;
+                const coords_t yi = (y >> level) & 1u;
+                const coords_t zi = (z >> level) & 1u;
+                const coords_t octant = (xi << 2) | (yi << 1) | zi;
+                key = (key << 3) + mortonToHilbert[octant];
+                
+                // Turn x, y, z
+                x ^= -(xi & ((!yi) | zi));
+                y ^= -((xi & (yi | zi)) | (yi & (!zi)));
+                z ^= -((xi & (!yi) & (!zi)) | (yi & (!zi)));
+
+                if (zi) {
+                    coords_t temp = x;
+                    x = y, y = z, z = temp;
+                } else if (!yi) {
+                    coords_t temp = x;
+                    x = z, z = temp;
+                }
+            }
+            return key;
         }
 
         static inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
-            // TODO
+            // Initialize the coords values
+            x = 0, y = 0, z = 0;
+            for(int level = 0; level < MAX_DEPTH; level++) {
+                // Extract the octant from the key and put the bits into xi, yi and zi
+                const coords_t octant   = (code >> (3 * level)) & 7u;
+                // std::cout << " octant at level " << level << " is " << octant << std::endl;
+                const coords_t xi = octant >> 2u;
+                const coords_t yi = (octant >> 1u) & 1u;
+                const coords_t zi = octant & 1u;
+
+                if(yi ^ zi) {
+                    // Cylic rotation x, y, z -> z, x, y
+                    coords_t temp = x;
+                    x = z, z = y, y = temp;
+                } else if((!xi & !yi & !zi) || (xi & yi & zi)) {
+                    // Swap x and z
+                    coords_t temp = x;
+                    x = z, z = temp;
+                }
+
+                // Turn x, y, z (Karnaugh mapped operations, check citation and Lam and Shapiro paperdetailing 2D case 
+                // for understanding how this works)
+                unsigned mask = (1u << level) - 1u;
+                x ^= mask & (-(xi & (yi | zi)));
+                y ^= mask & (-((xi & ((!yi) | (!zi))) | ((!xi) & yi & zi)));
+                z ^= mask & (-((xi & (!yi) & (!zi)) | (yi & zi)));
+
+                // Append the new bit to the position
+                x |= (xi << level);
+                y |= ((xi ^ yi) << level);
+                z |= ((yi ^ zi) << level);
+            }
             return;
         }
     };

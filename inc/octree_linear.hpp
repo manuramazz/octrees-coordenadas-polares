@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
-#include "PointEncoding/morton_encoder.hpp"
 #include "PointEncoding/common.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
@@ -29,11 +28,11 @@
 * @date 16/11/2024
 * 
 */
-template <PointType Point_t, typename Encoder = PointEncoding::MortonEncoder64>
+template <PointType Point_t, typename Encoder_t = PointEncoding::NoEncoder>
 class LinearOctree {
 private:
-    using key_t = typename Encoder::key_t;
-    using coords_t = typename Encoder::coords_t;
+    using key_t = typename Encoder_t::key_t;
+    using coords_t = typename Encoder_t::coords_t;
 
     /// @brief The maximum number of points in a leaf
     static constexpr unsigned int MAX_POINTS        = 100;
@@ -58,7 +57,7 @@ private:
 
     /**
      * @brief The leaves of the octree in cornerstone array format.
-     * @details This array contains morton codes (interpreted here as octal digit numbers) satisfying certain constraints:
+     * @details This array contains encoded (Hilbert or Morton) points (interpreted here as octal digit numbers) satisfying certain constraints:
      * 1. The length of the array is nLeaf + 1
      * 2. The first element is 0 and the last element 8^MAX_DEPTH, where MAX_DEPTH is the maximum depth of the encoding system 
      * (i.e. an upper bound for every possible encoding of a point)
@@ -100,7 +99,7 @@ private:
     std::vector<uint32_t> parents; // TODO: this may not be needed
 
     /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
-    std::vector<uint32_t> levelRange = std::vector<uint32_t>(Encoder::MAX_DEPTH + 2);
+    std::vector<uint32_t> levelRange = std::vector<uint32_t>(Encoder_t::MAX_DEPTH + 2);
 
     /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
     std::vector<int32_t> internalToLeaf;
@@ -128,7 +127,7 @@ private:
     Box bbox = Box(Point(), Vector());
 
     /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
-    Vector precomputedRadii[Encoder::MAX_DEPTH + 1];
+    Vector precomputedRadii[Encoder_t::MAX_DEPTH + 1];
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     float halfLengths[3];
@@ -183,22 +182,22 @@ private:
         // Decide if we split or not
         // TODO: check MIN_OCTANT_RADIUS
         // split into 4 layers
-        if (nodeCount > MAX_POINTS * 512 && level + 3 < Encoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < Encoder_t::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 4);
             return 4096; 
         }
         // split into 3 layers
-        if (nodeCount > MAX_POINTS * 64 && level + 2 < Encoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < Encoder_t::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 3);
             return 512;
         }
         // split into 2 layers
-        if (nodeCount > MAX_POINTS * 8 && level + 1 < Encoder::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < Encoder_t::MAX_DEPTH) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 2);
             return 64; 
         }
         // split into 1 layer
-        if (nodeCount > MAX_POINTS && level < Encoder::MAX_DEPTH ) { 
+        if (nodeCount > MAX_POINTS && level < Encoder_t::MAX_DEPTH ) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 1);
             return 8; 
         }
@@ -216,16 +215,16 @@ private:
     inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
         key_t node = leaves[index];
         key_t range = leaves[index+1] - node;
-        uint32_t level = PointEncoding::getLevel<Encoder>(range);
+        uint32_t level = PointEncoding::getLevel<Encoder_t>(range);
         if(level == 0) {
             return {-1, level};
         }
 
-        uint32_t siblingId = PointEncoding::getSiblingId<Encoder>(node, level);
+        uint32_t siblingId = PointEncoding::getSiblingId<Encoder_t>(node, level);
 
         // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
         // to the code parent and the next parent is the range spanned by two consecutive codes at that level
-        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + PointEncoding::nodeRange<Encoder>(level - 1));
+        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + PointEncoding::nodeRange<Encoder_t>(level - 1));
         if(!siblingsOnTree) siblingId = -1;
 
         return {siblingId, level};
@@ -284,7 +283,7 @@ private:
     
         key_t node = leaves[index];
         key_t range = leaves[index+1] - node;
-        uint32_t level = PointEncoding::getLevel<Encoder>(range);
+        uint32_t level = PointEncoding::getLevel<Encoder_t>(range);
 
         // The new position to put the node into (nodeOps value after exclusive scan)
         uint32_t newNodeIndex = nodeOps[index]; 
@@ -293,8 +292,8 @@ private:
         newLeaves[newNodeIndex] = node;
         if(opCode > 1) {
             // Split the node into 8^L as marked by the opCode, add the adequate codes to the new leaves
-            uint32_t levelDiff = PointEncoding::log8ceil<Encoder>(opCode);
-            key_t gap = PointEncoding::nodeRange<Encoder>(level + levelDiff);
+            uint32_t levelDiff = PointEncoding::log8ceil<Encoder_t>(opCode);
+            key_t gap = PointEncoding::nodeRange<Encoder_t>(level + levelDiff);
             for (uint32_t sibling = 1; sibling < opCode; sibling++) {
                 newLeaves[newNodeIndex + sibling] = newLeaves[newNodeIndex + sibling - 1] + gap;
             }
@@ -358,7 +357,7 @@ private:
         uint32_t ret = 0;
         for (uint32_t l = 1; l <= level + 1; ++l)
         {
-            uint32_t digit = PointEncoding::octalDigit<Encoder>(key, l);
+            uint32_t digit = PointEncoding::octalDigit<Encoder_t>(key, l);
             ret += digitWeight(digit);
         }
         return ret;
@@ -373,14 +372,14 @@ private:
         // Create the prefixesand internaltoleaf arrays for the leafs
         for(int i = 0; i<nLeaf; i++) {
             key_t key = leaves[i];
-            uint32_t level = PointEncoding::getLevel<Encoder>(leaves[i+1] - key);
-            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder>(key, 3*level);
+            uint32_t level = PointEncoding::getLevel<Encoder_t>(leaves[i+1] - key);
+            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, 3*level);
             internalToLeaf[i + nInternal] = i + nInternal;
 
-            uint32_t prefixLength = PointEncoding::commonPrefix<Encoder>(key, leaves[i+1]);
+            uint32_t prefixLength = PointEncoding::commonPrefix<Encoder_t>(key, leaves[i+1]);
             if(prefixLength % 3 == 0 && i < nLeaf - 1) {
                 uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
-                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder>(key, prefixLength);
+                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, prefixLength);
                 internalToLeaf[octIndex] = octIndex;
             }
         }
@@ -388,11 +387,11 @@ private:
 
     // Determine octree subdivision level boundaries
     void getLevelRange() {
-        for(uint32_t level = 0; level <= Encoder::MAX_DEPTH; level++) {
-            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder>(0, 3 * level));
+        for(uint32_t level = 0; level <= Encoder_t::MAX_DEPTH; level++) {
+            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder_t>(0, 3 * level));
             levelRange[level] = std::distance(prefixes.begin(), it);
         }
-        levelRange[Encoder::MAX_DEPTH + 1] = nTotal;
+        levelRange[Encoder_t::MAX_DEPTH + 1] = nTotal;
     }
 
     // Extract parent/child relationships from binary tree and translate to sorted order
@@ -400,12 +399,12 @@ private:
         for(int i = 0; i<nInternal; i++) {
             uint32_t idxA = leafToInternal[i];
             key_t prefix = prefixes[idxA];
-            key_t nodeKey = PointEncoding::decodePlaceholderBit<Encoder>(prefix);
-            unsigned prefixLength = PointEncoding::decodePrefixLength<Encoder>(prefix);
+            key_t nodeKey = PointEncoding::decodePlaceholderBit<Encoder_t>(prefix);
+            unsigned prefixLength = PointEncoding::decodePrefixLength<Encoder_t>(prefix);
             unsigned level = prefixLength / 3;
-            assert(level < Encoder::MAX_DEPTH);
+            assert(level < Encoder_t::MAX_DEPTH);
 
-            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder>(nodeKey, prefixLength + 3);
+            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder_t>(nodeKey, prefixLength + 3);
 
             uint32_t leafSearchStart = levelRange[level + 1];
             uint32_t leafSearchEnd   = levelRange[level + 2];
@@ -532,12 +531,12 @@ public:
         bbox = Box(center, radii);
 
         // Compute the physical half lengths for multiplying with the encoded coordinates
-        halfLengths[0] = 0.5f * Encoder::EPS * (bbox.maxX() - bbox.minX());
-        halfLengths[1] = 0.5f * Encoder::EPS * (bbox.maxY() - bbox.minY());
-        halfLengths[2] = 0.5f * Encoder::EPS * (bbox.maxZ() - bbox.minZ());
+        halfLengths[0] = 0.5f * Encoder_t::EPS * (bbox.maxX() - bbox.minX());
+        halfLengths[1] = 0.5f * Encoder_t::EPS * (bbox.maxY() - bbox.minY());
+        halfLengths[2] = 0.5f * Encoder_t::EPS * (bbox.maxZ() - bbox.minZ());
 
-        for(int i = 0; i<= Encoder::MAX_DEPTH; i++) {
-            coords_t sideLength = (1u << (Encoder::MAX_DEPTH - i));
+        for(int i = 0; i<= Encoder_t::MAX_DEPTH; i++) {
+            coords_t sideLength = (1u << (Encoder_t::MAX_DEPTH - i));
             precomputedRadii[i] = Vector(
                 sideLength * halfLengths[0],
                 sideLength * halfLengths[1],
@@ -557,7 +556,9 @@ public:
         std::vector<std::pair<key_t, Point_t>> encoded_points;
         encoded_points.reserve(points.size());
         for(size_t i = 0; i < points.size(); i++) {
-            encoded_points.emplace_back(Encoder::encode(points[i], bbox), points[i]);
+            coords_t x, y, z;
+            PointEncoding::getAnchorCoords<Encoder_t>(points[i], bbox, x, y, z);
+            encoded_points.emplace_back(Encoder_t::encode(x, y, z), points[i]);
         }
 
         // TODO: implement parallel radix sort
@@ -579,13 +580,11 @@ public:
         // Builds the octree sequentially using the cornerstone algorithm
 
         // We start with 0, 7777...777 (in octal)
-        leaves = {0, Encoder::UPPER_BOUND};
+        leaves = {0, Encoder_t::UPPER_BOUND};
         counts = {(uint32_t) codes.size()};
 
         while(!updateOctreeLeaves())
             ;
-        
-
     }
 
     /**
@@ -675,7 +674,12 @@ public:
         // Compute internal node layouts
         computeInternalNodeLayouts();
     }
-
+    void printKey(uint64_t key) {
+    for(int i=20; i>=0; i--) {
+        std::cout << std::bitset<3>(key >> (3*i)) << " ";
+    }
+    std::cout << std::endl;
+    }
     /**
      * @brief Computes the octree geometry (the centers and radii of each internal node and leaf)
      * 
@@ -686,10 +690,13 @@ public:
     void computeGeometry() {
         for(uint32_t i = 0; i<prefixes.size(); i++) {
             key_t prefix = prefixes[i];
-            key_t startKey = PointEncoding::decodePlaceholderBit<Encoder>(prefix);
-            uint32_t level = PointEncoding::decodePrefixLength<Encoder>(prefix) / 3;
+            key_t startKey = PointEncoding::decodePlaceholderBit<Encoder_t>(prefix);
+            uint32_t level = PointEncoding::decodePrefixLength<Encoder_t>(prefix) / 3;
+            // std::cout << "computeGeometry " << prefix << " and key: ";
+            // printKey(startKey);
             std::tie(centers[i], radii[i]) = 
-                PointEncoding::getCenterAndRadii<Encoder>(startKey, level, bbox, halfLengths, precomputedRadii);
+                PointEncoding::getCenterAndRadii<Encoder_t>(startKey, level, bbox, halfLengths, precomputedRadii);
+            // std::cout << "center: " << centers[i].getX() << " " << centers[i].getY() << " " << centers[i].getZ() << std::endl;
         }
     }
 
@@ -806,19 +813,25 @@ public:
 	template<typename Kernel>
 	[[nodiscard]] size_t numNeighbors(const Kernel& k) const {
         size_t ptsInside = 0;
+        // std::cout << "entering numNeighbors with kernel center = " << k.center() << " radii = " << k.radii() << std::endl;
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+            // std::cout << "checkBoxIntersect with " << nodeIndex;
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
+            // std::cout << " center = " << nodeCenter << " radii = " << nodeRadii;
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE:
                     // Completely inside, all add points except center and prune
                     ptsInside += this->internalCounts[nodeIndex];
+                    // std::cout << "--> INSIDE, ptsInside = " << ptsInside << std::endl;
                     return false;
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
                     // Overlaps but not inside, keep descending
+                    // std::cout << "--> OVERLAPS" << std::endl;
                     return true;
                 case  KernelAbstract::IntersectionJudgement::OUTSIDE:
                     // Completely outside, prune
+                    // std::cout << "--> OUTSIDE" << std::endl;
                     return false;
                 default:
                     return false;
@@ -826,11 +839,14 @@ public:
         };
         
         auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
+            // std::cout << "findAndIncrementsPointsCount with " << nodeIndex;
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto start = this->points.begin() + this->layout[leafIdx];
             auto end = this->points.begin() + this->layout[leafIdx+1];
+            // std::cout << " leafIndex = " << leafIdx << " with bounds: " << this->layout[leafIdx] << ", " << this->layout[leafIdx+1] << std::endl;
             for (auto it = start; it != end; it++) {
                 if (k.isInside(*it)) {
+                    // std::cout << "  added point " << (*it).id() << std::endl;
                     ptsInside++;
                 }
             }
@@ -838,7 +854,9 @@ public:
         singleTraversal(checkBoxIntersect, findAndIncrementPointsCount);
 
         // Subtract the center from the final count
-        ptsInside--;
+        if(ptsInside)
+            ptsInside--;
+        // std::cout << "numNeighbors done, final result " << ptsInside << std::endl;
         return ptsInside;
 	}
 
@@ -1108,40 +1126,40 @@ public:
 
     // Misc. functions for debugging
     template <typename T>
-    inline void printVector(std::vector<T> &v, std::string name = "v") {
-        std::cout << "Size of " << name << " = " << v.size() << "\n";
+    inline void writeVector(std::ofstream &file, std::vector<T> &v, std::string name = "v") {
+        file << "Size of " << name << " = " << v.size() << "\n";
         for(size_t i = 0; i<v.size(); i++)
-            std::cout << name << "[" << i << "] = " << v[i] << "\n";
+            file << name << "[" << i << "] = " << v[i] << "\n";
     }
 
     template <typename U, typename V>
-    inline void printPairsVector(std::vector<std::pair<U, V>> &v, std::string name = "v") {
-        std::cout << "Size of " << name << " = " << v.size() << "\n";
+    inline void writeVectorPairs(std::ofstream &file, std::vector<std::pair<U, V>> &v, std::string name = "v") {
+        file << "Size of " << name << " = " << v.size() << "\n";
         for(size_t i = 0; i<v.size(); i++)
-            std::cout << name << "[" << i << "] = " << v[i].first << ", " << v[i].second << "\n";
+            file << name << "[" << i << "] = " << v[i].first << ", " << v[i].second << "\n";
     }
 
     template <typename T>
-    inline void printVectorBinary(std::vector<T> &v, std::string name = "v") {
-        std::cout << "Size of " << name << " = " << v.size() << "\n";
+    inline void writeVectorBinary(std::ofstream &file, std::vector<T> &v, std::string name = "v") {
+        file << "Size of " << name << " = " << v.size() << "\n";
         for(size_t i = 0; i<v.size(); i++)
-            std::cout << name << "[" << i << "] = 0b" << std::bitset<64>(v[i]) << "\n";
+            file << name << "[" << i << "] = 0b" << std::bitset<64>(v[i]) << "\n";
     }
     
-    void printMetadata() {
-        std::cout << "MAX_POINTS = " << MAX_POINTS << "\n";
-        std::cout << "n = " << nTotal << "  leafs = " << nLeaf << " internal = " << nInternal << "\n";
-        printVectorBinary(leaves, "leaves");
-        printVector(counts, "counts");
-        printVector(layout, "layout");
-        printVectorBinary(prefixes, "prefixes");
-        printVector(offsets, "offsets");
-        printVector(parents, "parents");
-        printVector(levelRange, "levelRange");
-        printVector(internalToLeaf, "internalToLeaf");
-        printVector(leafToInternal, "leafToInternal");
-        printVector(internalCounts, "internalCounts");
-        printPairsVector(internalLayoutRanges, "internalLayoutRanges");
-        std::cout << std::flush;
+    void writeOctree(std::ofstream &file) {
+        file << "MAX_POINTS = " << MAX_POINTS << "\n";
+        file << "n = " << nTotal << "  leafs = " << nLeaf << " internal = " << nInternal << "\n";
+        writeVectorBinary(file, leaves, "leaves");
+        writeVector(file, counts, "counts");
+        writeVector(file, layout, "layout");
+        writeVectorBinary(file, prefixes, "prefixes");
+        writeVector(file, offsets, "offsets");
+        writeVector(file, parents, "parents");
+        writeVector(file, levelRange, "levelRange");
+        writeVector(file, internalToLeaf, "internalToLeaf");
+        writeVector(file, leafToInternal, "leafToInternal");
+        writeVector(file, internalCounts, "internalCounts");
+        writeVectorPairs(file, internalLayoutRanges, "internalLayoutRanges");
+        file << std::flush;
     }
 };

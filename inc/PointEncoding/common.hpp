@@ -2,33 +2,28 @@
 #pragma once
 
 #include "libmorton/morton.h"
+#include <bitset>
 #include "Geometry/point.hpp"
 #include "Geometry/Box.hpp"
 
 namespace PointEncoding {
 
-    template <typename Encoder>
-    std::string getEncoderName() {
-        return Encoder::NAME;
-    }
+    // No encoder for pointer based octree
+    struct NoEncoder { };
 
     template <typename Encoder>
     inline void getAnchorCoords(const Point& p, const Box &bbox, 
         typename Encoder::coords_t &x, typename Encoder::coords_t &y, typename Encoder::coords_t &z) {
         // Put physical coords into the unit cube
-        float x_transf = ((p.getX() - bbox.center().getX())  + bbox.radii().getX()) / (2 * bbox.radii().getX());
-        float y_transf = ((p.getY() - bbox.center().getY())  + bbox.radii().getY()) / (2 * bbox.radii().getY());
-        float z_transf = ((p.getZ() - bbox.center().getZ())  + bbox.radii().getZ()) / (2 * bbox.radii().getZ());
-
-        // Edge case of coordinates falling exactly into 1, which would be problematic
-        if(x_transf + Encoder::EPS >= 1.0f) x_transf = 1.0f - Encoder::EPS;
-        if(y_transf + Encoder::EPS >= 1.0f) y_transf = 1.0f - Encoder::EPS;
-        if(z_transf + Encoder::EPS >= 1.0f) z_transf = 1.0f - Encoder::EPS;
+        double x_transf = ((p.getX() - bbox.center().getX())  + bbox.radii().getX()) / (2 * bbox.radii().getX());
+        double y_transf = ((p.getY() - bbox.center().getY())  + bbox.radii().getY()) / (2 * bbox.radii().getY());
+        double z_transf = ((p.getZ() - bbox.center().getZ())  + bbox.radii().getZ()) / (2 * bbox.radii().getZ());
         
-        // Scale to [0,2^L]^3 for morton encoding
-        x = (typename Encoder::coords_t) (x_transf * (1 << (Encoder::MAX_DEPTH)));
-        y = (typename Encoder::coords_t) (y_transf * (1 << (Encoder::MAX_DEPTH)));
-        z = (typename Encoder::coords_t) (z_transf * (1 << (Encoder::MAX_DEPTH)));
+        // Scale to [0,2^L)^3 for morton encoding, handle edge case where coordinate could be 2^L if _transf is exactly 1.0
+        typename Encoder::coords_t maxCoord = (1u << Encoder::MAX_DEPTH) - 1u;
+        x = std::min((typename Encoder::coords_t) (x_transf * (1 << (Encoder::MAX_DEPTH))), maxCoord);
+        y = std::min((typename Encoder::coords_t) (y_transf * (1 << (Encoder::MAX_DEPTH))), maxCoord);
+        z = std::min((typename Encoder::coords_t) (z_transf * (1 << (Encoder::MAX_DEPTH))), maxCoord);
     }
 
     template <typename Encoder>
@@ -36,7 +31,17 @@ namespace PointEncoding {
         // Decode the points
         typename Encoder::coords_t min_x, min_y, min_z;
         Encoder::decode(code, min_x, min_y, min_z);
-
+        // Now adjust the coordinates so they indicate the lowest code in the current level
+        // In Morton curves this is not needed, but in Hilbert curves it is, since it can return any corner instead of lower one
+        typename Encoder::coords_t mask = ((1u << Encoder::MAX_DEPTH) - 1) ^ ((1u << (Encoder::MAX_DEPTH - level)) - 1);
+        // std::cout << "mask: " << std::bitset<64>(mask) << std::endl;
+        min_x &= mask;
+        min_y &= mask;
+        min_z &= mask;
+        // std::cout << "decoded coords: " 
+        // << std::bitset<Encoder::MAX_DEPTH>(min_x) << " " 
+        // << std::bitset<Encoder::MAX_DEPTH>(min_y) << " " 
+        // << std::bitset<Encoder::MAX_DEPTH>(min_z) << std::endl;
         // Find the physical center by multiplying the encoding with the halflength
         // to get to the low corner of the cell, and then adding the radii of the cell
         Point center = Point(

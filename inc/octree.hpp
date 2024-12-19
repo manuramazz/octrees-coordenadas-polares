@@ -12,8 +12,9 @@
 #include <iostream>
 #include <queue>
 #include <vector>
-
-template <PointType Point_t>
+// Encoder is not used here, but points may already be sorted by the Encoder. We add it as template argument
+// for simplicity.
+template <PointType Point_t, typename Encoder_t>
 class Octree
 {
 	private:

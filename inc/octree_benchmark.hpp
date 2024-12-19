@@ -4,8 +4,7 @@
 #include <random>
 #include <omp.h>
 #include "NeighborKernels/KernelFactory.hpp"
-#include "octree_factory.hpp"
-#include "PointEncoding/morton_encoder.hpp"
+#include "type_names.hpp"
 
 struct SearchSet {
     const size_t numSearches;
@@ -164,10 +163,10 @@ struct ResultSet {
 };
 
 
-template <OctreeType Octree_t, PointType Point_t, typename Encoder_t = PointEncoding::MortonEncoder64>
+template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 class OctreeBenchmark {
     private:
-        const std::unique_ptr<Octree_t> oct;
+        const std::unique_ptr<Octree_t<Point_t, Encoder_t>> oct;
         const std::string comment;
 
         std::vector<Point_t>& points;
@@ -176,10 +175,6 @@ class OctreeBenchmark {
         const bool check;
         const std::shared_ptr<const SearchSet> searchSet;
         std::shared_ptr<ResultSet<Point_t>> resultSet;
-
-        void rebuild() {
-            oct = std::make_unique(octreeFactory<Octree_t, Point_t, Encoder_t>(points)); 
-        }
 
         #pragma GCC push_options
         #pragma GCC optimize("O0")
@@ -277,12 +272,16 @@ class OctreeBenchmark {
                             const std::string& kernel, const float radius, const benchmarking::Stats<>& stats) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
+                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup\n";
             }
-            std::string octreeName = getOctreeName<Octree_t, Point_t, Encoder_t>() + " " + comment;
+            std::string octreeName = getOctreeName<Octree_t>();
+            std::string pointTypeName = getPointName<Point_t>();
+            std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
             // Append the benchmark data
             outputFile << getCurrentDate() << ',' 
                 << octreeName << ',' 
+                << pointTypeName << ','
+                << encoderTypename << ','
                 << points.size() << ','
                 << operation << ',' 
                 << kernel << ',' 
@@ -300,17 +299,12 @@ class OctreeBenchmark {
         OctreeBenchmark(std::vector<Point_t>& points, size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(), bool check = false,
             std::string comment = "") :
             points(points), 
-            oct(std::make_unique<Octree_t>(points)),
+            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points)),
             searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
             outputFile(file),
             check(check),
             comment(comment),
             resultSet(std::make_shared<ResultSet<Point_t>>(searchSet)) { }
-
-        void benchmarkBuild(size_t repeats) {
-            auto stats = benchmarking::benchmark(repeats, [&]() { rebuild(); });
-            appendToCsv("build", "NA", -1.0, stats);
-        }
 
         template<Kernel_t kernel>
         void benchmarkSearchNeigh(size_t repeats, float radius) {
@@ -352,7 +346,8 @@ class OctreeBenchmark {
         }
 
         static void runAlgoComparisonBenchmark(OctreeBenchmark &ob, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            std::cout << "Running algorithm implementation comparison benchmark on " << getOctreeName<Octree_t, Point_t, Encoder_t>() << " with parameters " << std::endl;
+            std::cout << "Running algorithm implementation comparison benchmark on " << getOctreeName<Octree_t>() << " with points " << getPointName<Point_t>() << 
+                " and encoder " << PointEncoding::getEncoderName<Encoder_t>() << std::endl << "Parameters:" << std::endl;
             for(int i = 0; i<benchmarkRadii.size(); i++) {
                 std::cout << benchmarkRadii[i];
                 if(i != benchmarkRadii.size()-1) {
@@ -399,12 +394,13 @@ class OctreeBenchmark {
         }
 
         static void runFullBenchmark(OctreeBenchmark &ob, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            std::cout << "Running octree benchmark on " << getOctreeName<Octree_t, Point_t>() << " with parameters:" << std::endl;
+            std::cout << "Running octree benchmark on " << getOctreeName<Octree_t>() << " with points " << getPointName<Point_t>() << 
+                " and encoder " << PointEncoding::getEncoderName<Encoder_t>() << std::endl << "Parameters:" << std::endl;
             std::cout << "  Search radii: {";
             for(int i = 0; i<benchmarkRadii.size(); i++) {
-                std::cout << benchmarkRadii[i];
-                if(i != benchmarkRadii.size()-1) {
-                std::cout << ", ";
+                    std::cout << benchmarkRadii[i];
+                    if(i != benchmarkRadii.size()-1) {
+                    std::cout << ", ";
                 }
             }
             std::cout << "}" << std::endl;

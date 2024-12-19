@@ -6,57 +6,65 @@
 
 #include "Geometry/Box.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
-
+#include "PointEncoding/common.hpp"
+#include "PointEncoding/morton_encoder.hpp"
+#include "PointEncoding/hilbert_encoder.hpp"
 #include <algorithm>
 #include <unordered_map>
 #include "Geometry/Lpoint.hpp"
 #include "Geometry/Lpoint64.hpp"
 
-// TODO: move this implementations to octree.hpp so we dont need to predefine all the point types we need
-template class Octree<Lpoint>;
-template class Octree<Lpoint64>;
+// TODO: move this implementations to octree.hpp so we dont need to predefine all possible pointer octrees
+template class Octree<Lpoint, PointEncoding::NoEncoder>;
+template class Octree<Lpoint64, PointEncoding::NoEncoder>;
+template class Octree<Lpoint, PointEncoding::HilbertEncoder64>;
+template class Octree<Lpoint64, PointEncoding::HilbertEncoder64>;
+template class Octree<Lpoint, PointEncoding::MortonEncoder32>;
+template class Octree<Lpoint64, PointEncoding::MortonEncoder32>;
+template class Octree<Lpoint, PointEncoding::MortonEncoder64>;
+template class Octree<Lpoint64, PointEncoding::MortonEncoder64>;
 
-template <PointType Point_t>
-Octree<Point_t>::Octree() = default;
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree() = default;
 
-template <PointType Point_t>
-Octree<Point_t>::Octree(std::vector<Point_t>& points)
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-template <PointType Point_t>
-Octree<Point_t>::Octree(std::vector<Point_t*>& points)
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points)
 {
 	center_ = mbb(points, radius_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-template <PointType Point_t>
-Octree<Point_t>::Octree(const Vector& center, const float radius) : center_(center), radius_(radius)
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree(const Vector& center, const float radius) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 };
 
-template <PointType Point_t>
-Octree<Point_t>::Octree(Vector center, float radius, std::vector<Point_t*>& points) : center_(center), radius_(radius)
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree(Vector center, float radius, std::vector<Point_t*>& points) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-template <PointType Point_t>
-Octree<Point_t>::Octree(Vector center, float radius, std::vector<Point_t>& points) : center_(center), radius_(radius)
+template <PointType Point_t, typename Encoder_t>
+Octree<Point_t, Encoder_t>::Octree(Vector center, float radius, std::vector<Point_t>& points) : center_(center), radius_(radius)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::computeOctreeLimits()
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::computeOctreeLimits()
 /**
    * Compute the minimum and maximum coordinates of the octree bounding box.
    */
@@ -67,8 +75,8 @@ void Octree<Point_t>::computeOctreeLimits()
 	max_.setY(center_.getY() + radius_);
 }
 
-template <PointType Point_t>
-std::vector<std::pair<Point, size_t>> Octree<Point_t>::computeNumPoints() const
+template <PointType Point_t, typename Encoder_t>
+std::vector<std::pair<Point, size_t>> Octree<Point_t, Encoder_t>::computeNumPoints() const
 /**
  * @brief Returns a vector containing the number of points of all populated octants
  * @param numPoints
@@ -94,8 +102,8 @@ std::vector<std::pair<Point, size_t>> Octree<Point_t>::computeNumPoints() const
 	return numPoints;
 }
 
-template <PointType Point_t>
-std::vector<std::pair<Point, double>> Octree<Point_t>::computeDensities() const
+template <PointType Point_t, typename Encoder_t>
+std::vector<std::pair<Point, double>> Octree<Point_t, Encoder_t>::computeDensities() const
 /*
  * Returns a vector containing the densities of all populated octrees
  */
@@ -120,8 +128,8 @@ std::vector<std::pair<Point, double>> Octree<Point_t>::computeDensities() const
 	return densities;
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::writeDensities(const std::filesystem::path& path) const
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::writeDensities(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -137,8 +145,8 @@ void Octree<Point_t>::writeDensities(const std::filesystem::path& path) const
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::writeNumPoints(const std::filesystem::path& path) const
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::writeNumPoints(const std::filesystem::path& path) const
 /**
  * @brief Compute and write to file the density of each non-empty octan of a given octree.
  * @param path
@@ -155,8 +163,8 @@ void Octree<Point_t>::writeNumPoints(const std::filesystem::path& path) const
 }
 
 // FIXME: This function may overlap with some parts of extractPoint[s]
-template <PointType Point_t>
-const Octree<Point_t>* Octree<Point_t>::findOctant(const Point_t* p) const
+template <PointType Point_t, typename Encoder_t>
+const Octree<Point_t, Encoder_t>* Octree<Point_t, Encoder_t>::findOctant(const Point_t* p) const
 /**
  * @brief Find the octant containing a given point.
  * @param p
@@ -183,8 +191,8 @@ const Octree<Point_t>* Octree<Point_t>::findOctant(const Point_t* p) const
 	return nullptr;
 }
 
-template <PointType Point_t>
-bool Octree<Point_t>::isInside2D(const Point& p) const
+template <PointType Point_t, typename Encoder_t>
+bool Octree<Point_t, Encoder_t>::isInside2D(const Point& p) const
 /**
    * Checks if a point is inside the octree limits.
    * @param p
@@ -199,8 +207,8 @@ bool Octree<Point_t>::isInside2D(const Point& p) const
 	return false;
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::insertPoints(std::vector<Point_t>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::insertPoints(std::vector<Point_t>& points)
 {
 	for (Point_t& p : points)
 	{
@@ -208,8 +216,8 @@ void Octree<Point_t>::insertPoints(std::vector<Point_t>& points)
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::insertPoints(std::vector<Point_t*>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::insertPoints(std::vector<Point_t*>& points)
 {
 	for (Point_t* p : points)
 	{
@@ -217,8 +225,8 @@ void Octree<Point_t>::insertPoints(std::vector<Point_t*>& points)
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::insertPoint(Point_t* p)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::insertPoint(Point_t* p)
 {
 	unsigned int idx = 0;
 
@@ -246,8 +254,8 @@ void Octree<Point_t>::insertPoint(Point_t* p)
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::createOctants()
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::createOctants()
 {
 	for (size_t i = 0; i < OCTANTS_PER_NODE; i++)
 	{
@@ -259,8 +267,8 @@ void Octree<Point_t>::createOctants()
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::fillOctants()
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::fillOctants()
 {
 	for (Point_t* p : points_)
 	{
@@ -272,8 +280,8 @@ void Octree<Point_t>::fillOctants()
 	points_.clear();
 }
 
-template <PointType Point_t>
-size_t Octree<Point_t>::octantIdx(const Point_t* p) const
+template <PointType Point_t, typename Encoder_t>
+size_t Octree<Point_t, Encoder_t>::octantIdx(const Point_t* p) const
 {
 	size_t child = 0;
 
@@ -284,8 +292,8 @@ size_t Octree<Point_t>::octantIdx(const Point_t* p) const
 	return child;
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::buildOctree(std::vector<Point_t>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::buildOctree(std::vector<Point_t>& points)
 /**
    * Build the Octree
    */
@@ -294,8 +302,8 @@ void Octree<Point_t>::buildOctree(std::vector<Point_t>& points)
 	insertPoints(points);
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::buildOctree(std::vector<Point_t*>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::buildOctree(std::vector<Point_t*>& points)
 /**
    * Build the Octree
    */
@@ -304,8 +312,8 @@ void Octree<Point_t>::buildOctree(std::vector<Point_t*>& points)
 	insertPoints(points);
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::KNN(const Point& p, const size_t k, const size_t maxNeighs) const
 /**
  * @brief KNN algorithm. Returns the min(k, maxNeighs) nearest neighbors of a given point p
  * @param p
@@ -345,8 +353,8 @@ std::vector<Point_t*> Octree<Point_t>::KNN(const Point& p, const size_t k, const
 	return knn;
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::writeOctree(std::ofstream& f, size_t index) const
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::writeOctree(std::ofstream& f, size_t index) const
 {
 	index++;
 	f << "Depth: " << index << " "
@@ -369,8 +377,8 @@ void Octree<Point_t>::writeOctree(std::ofstream& f, size_t index) const
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::extractPoint(const Point_t* p)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::extractPoint(const Point_t* p)
 /**
  * Searches for p and (if found) removes it from the octree.
  *
@@ -401,8 +409,8 @@ void Octree<Point_t>::extractPoint(const Point_t* p)
 	}
 }
 
-template <PointType Point_t>
-Point_t* Octree<Point_t>::extractPoint()
+template <PointType Point_t, typename Encoder_t>
+Point_t* Octree<Point_t, Encoder_t>::extractPoint()
 /**
  * Searches for a point and, if it founds one, removes it from the octree.
  *
@@ -452,8 +460,8 @@ Point_t* Octree<Point_t>::extractPoint()
 	return p;
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::extractPoints(std::vector<Point_t>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::extractPoints(std::vector<Point_t>& points)
 {
 	for (Point_t& p : points)
 	{
@@ -461,8 +469,8 @@ void Octree<Point_t>::extractPoints(std::vector<Point_t>& points)
 	}
 }
 
-template <PointType Point_t>
-void Octree<Point_t>::extractPoints(std::vector<Point_t*>& points)
+template <PointType Point_t, typename Encoder_t>
+void Octree<Point_t, Encoder_t>::extractPoints(std::vector<Point_t*>& points)
 {
 	for (Point_t* p : points)
 	{
@@ -470,8 +478,8 @@ void Octree<Point_t>::extractPoints(std::vector<Point_t*>& points)
 	}
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchEraseCircleNeighbors(const std::vector<Point_t*>& points, double radius)
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::searchEraseCircleNeighbors(const std::vector<Point_t*>& points, double radius)
 /*
  * Searches points' circle neighbors and erases them from the octree.
  */
@@ -492,8 +500,8 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseCircleNeighbors(const std::vec
 	return pointsNeighbors;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vector<Point_t*>& points, float radius)
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::searchEraseSphereNeighbors(const std::vector<Point_t*>& points, float radius)
 {
 	std::vector<Point_t*> pointsNeighbors{};
 
@@ -512,8 +520,8 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseSphereNeighbors(const std::vec
 }
 
 /** Connected inside a spherical shell*/
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::searchConnectedShellNeighbors(const Point& point, const float nextDoorDistance,
                                                            const float minRadius, const float maxRadius) const
 {
 	std::vector<Point_t*> connectedShellNeighs;
@@ -529,8 +537,8 @@ std::vector<Point_t*> Octree<Point_t>::searchConnectedShellNeighbors(const Point
 }
 
 /** Connected circle neighbors*/
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::searchEraseConnectedCircleNeighbors(const float nextDoorDistance)
 {
 	std::vector<Point_t*> connectedCircleNeighbors;
 
@@ -548,8 +556,8 @@ std::vector<Point_t*> Octree<Point_t>::searchEraseConnectedCircleNeighbors(const
 	return connectedCircleNeighbors;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::connectedNeighbors(const Point* point, std::vector<Point_t*>& neighbors,
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::connectedNeighbors(const Point* point, std::vector<Point_t*>& neighbors,
                                                 const float nextDoorDistance)
 /**
 	 * Filters neighbors which are not connected to point through a chain of next-door neighbors. Erases neighbors in the
@@ -579,8 +587,8 @@ std::vector<Point_t*> Octree<Point_t>::connectedNeighbors(const Point* point, st
 	return connectedNeighbors;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, const float radius)
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::extractCloseNeighbors(const Point* p, std::vector<Point_t*>& neighbors, const float radius)
 /**
 	 * Fetches neighbors within radius from p, erasing them from neighbors and returning them.
 	 *
@@ -605,8 +613,8 @@ std::vector<Point_t*> Octree<Point_t>::extractCloseNeighbors(const Point* p, std
 	return closeNeighbors;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::kClosestCircleNeighbors(const Point_t* p, const size_t k) const
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::kClosestCircleNeighbors(const Point_t* p, const size_t k) const
 /**
 	 * Fetches the (up to if not enough points in octree) k closest neighbors with respect to 2D-distance.
 	 *
@@ -641,8 +649,8 @@ std::vector<Point_t*> Octree<Point_t>::kClosestCircleNeighbors(const Point_t* p,
 	return closeNeighbors;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const size_t n, float& radius, const float minRadius,
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::nCircleNeighbors(const Point_t* p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxIncrement,
                                               const float maxDecrement) const
 /**
@@ -670,8 +678,8 @@ std::vector<Point_t*> Octree<Point_t>::nCircleNeighbors(const Point_t* p, const 
 	return neighs;
 }
 
-template <PointType Point_t>
-std::vector<Point_t*> Octree<Point_t>::nSphereNeighbors(const Point_t& p, const size_t n, float& radius, const float minRadius,
+template <PointType Point_t, typename Encoder_t>
+std::vector<Point_t*> Octree<Point_t, Encoder_t>::nSphereNeighbors(const Point_t& p, const size_t n, float& radius, const float minRadius,
                                               const float maxRadius, const float maxStep) const
 /**
 	 * Radius-adaptive search method for sphere neighbors.
