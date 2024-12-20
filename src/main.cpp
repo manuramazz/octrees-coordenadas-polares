@@ -14,7 +14,7 @@
 #include "octree_benchmark.hpp"
 #include "Geometry/Lpoint.hpp"
 #include "Geometry/Lpoint64.hpp"
-#include "PointEncoding/morton_encoder.hpp"
+#include "PointEncoding/morton_encoder.hpp"q
 #include "PointEncoding/hilbert_encoder.hpp"
 #include <new>
 
@@ -23,8 +23,8 @@ namespace fs = std::filesystem;
 // Global benchmark parameters
 const std::vector<float> BENCHMARK_RADII = {0.5, 1.0, 2.5, 5.0};
 constexpr size_t REPEATS = 5;
-constexpr size_t NUM_SEARCHES = 1000;
-constexpr bool CHECK_RESULTS = true;
+constexpr size_t NUM_SEARCHES = 10000;
+constexpr bool CHECK_RESULTS = false;
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> buildAndRunBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
