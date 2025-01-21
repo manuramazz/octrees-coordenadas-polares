@@ -14,7 +14,7 @@
 #include "octree_benchmark.hpp"
 #include "Geometry/Lpoint.hpp"
 #include "Geometry/Lpoint64.hpp"
-#include "PointEncoding/morton_encoder.hpp"q
+#include "PointEncoding/morton_encoder.hpp"
 #include "PointEncoding/hilbert_encoder.hpp"
 #include <new>
 

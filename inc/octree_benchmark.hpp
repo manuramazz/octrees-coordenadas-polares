@@ -296,7 +296,7 @@ class OctreeBenchmark {
                             const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, size_t averageResultSize = 0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,avg_result_size\n";
+                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size\n";
             }
             std::string octreeName = getOctreeName<Octree_t>();
             std::string pointTypeName = getPointName<Point_t>();
@@ -317,6 +317,7 @@ class OctreeBenchmark {
                 << stats.median() << ',' 
                 << stats.stdev() << ','
                 << stats.usedWarmup() << ','
+                << stats.warmupValue() << ','
                 << averageResultSize << '\n';
         }
 
