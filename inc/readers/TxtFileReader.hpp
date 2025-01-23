@@ -129,7 +129,7 @@ class TxtFileReader : public FileReader<Point_t>
 			};
 		};
 
-		this->file_reading_loop(points, terminationCondition, pointInserter, -1, true);
+		this->file_reading_loop(points, terminationCondition, pointInserter, -1, false);
 
 		file.close();
 		std::cout << "Read points: " << idx << "\n";

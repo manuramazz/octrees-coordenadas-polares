@@ -81,7 +81,7 @@ class LasFileReader : public FileReader<Point_t>
 			);
 		};
 
-		this->file_reading_loop(points, terminationCondition, pointInserter, total_points, true);
+		this->file_reading_loop(points, terminationCondition, pointInserter, total_points, false);
 
 		// Cleanup
 		lasreader->close();

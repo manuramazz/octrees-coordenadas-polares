@@ -378,9 +378,9 @@ class OctreeBenchmark {
             const auto kernelStr = kernelToString(kernel);
             // note: the seq on searchNeighSeq means that execution is not parallelized, but the searchSets here are either sequential or 
             // shuffled meaning that indexes are 0,1,2,3... or a random permutation (see 2nd constructor of SearchSet)
-            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighSeq<kernel>(radius); });
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighSeq<kernel>(radius); }, false);
             // here the field comment is used to differentiate between sequential point order and shuffled order execution
-            appendToCsv("neighSearch " + comment, kernelStr, radius, stats, averageResultSize);
+            appendToCsv("neighSearch_" + comment, kernelStr, radius, stats, averageResultSize);
         }
 
         template<Kernel_t kernel>
@@ -424,16 +424,17 @@ class OctreeBenchmark {
 
         static void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
             std::cout << "Running " << bench_name << " benchmark on " << getOctreeName<Octree_t>() << " with points " << getPointName<Point_t>() << 
-                " and encoder " << PointEncoding::getEncoderName<Encoder_t>() << std::endl << "Parameters:" << std::endl;
+                " and encoder " << PointEncoding::getEncoderName<Encoder_t>() << "\nParameters:\n";
+            std::cout << "  Radii: {";
             for(int i = 0; i<benchmarkRadii.size(); i++) {
                 std::cout << benchmarkRadii[i];
                 if(i != benchmarkRadii.size()-1) {
-                std::cout << ", ";
+                    std::cout << ", ";
                 }
             }
-            std::cout << "}" << std::endl;
-            std::cout << "  Number of searches: " << numSearches << std::endl;
-            std::cout << "  Repeats: " << repeats << std::endl << std::endl;
+            std::cout << "}\n";
+            std::cout << "  Number of searches: " << numSearches << "\n";
+            std::cout << "  Repeats: " << repeats << "\n" << std::endl;
         }
 
         static void printBenchmarkUpdate(const std::string &method, const size_t totalExecutions, size_t &currentExecution, const float radius) {
@@ -442,7 +443,7 @@ class OctreeBenchmark {
         }
 
         void searchImplComparisonBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            printBenchmarkLog("search and numsearch implementation comparison", benchmarkRadii, repeats, numSearches);
+            printBenchmarkLog("neighSearch and numNeighSearch implementation comparison", benchmarkRadii, repeats, numSearches);
             size_t total = benchmarkRadii.size() * 4;
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
@@ -473,7 +474,7 @@ class OctreeBenchmark {
         }
 
         void searchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            printBenchmarkLog("search and numsearch", benchmarkRadii, repeats, numSearches);
+            printBenchmarkLog("neighSearch and numNeighSearch", benchmarkRadii, repeats, numSearches);
             size_t total = benchmarkRadii.size() * 2;
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
@@ -488,20 +489,6 @@ class OctreeBenchmark {
                 benchmarkNumNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i]);
                 benchmarkNumNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
                 printBenchmarkUpdate("Num. neighbor search", total, current, benchmarkRadii[i]);
-            }
-        }
-
-        void benchSearchNeighSeq(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
-            printBenchmarkLog("search neighbors sequential", benchmarkRadii, repeats, numSearches);
-
-            size_t total = benchmarkRadii.size() * 2;
-            size_t current = 1;
-            for(size_t i = 0; i<benchmarkRadii.size(); i++) {
-                benchmarkSearchNeighSeq<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
-                benchmarkSearchNeighSeq<Kernel_t::circle>(repeats, benchmarkRadii[i]);
-                benchmarkSearchNeighSeq<Kernel_t::cube>(repeats, benchmarkRadii[i]);
-                benchmarkSearchNeighSeq<Kernel_t::square>(repeats, benchmarkRadii[i]);
-                printBenchmarkUpdate("Neighbor search sequential", total, current, benchmarkRadii[i]);
             }
         }
 
