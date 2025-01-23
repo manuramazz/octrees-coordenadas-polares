@@ -223,13 +223,7 @@ class OctreeBenchmark {
             if(check && resultSet->resultsNeigh.empty())
                 resultSet->resultsNeigh.resize(searchSet->numSearches);
             size_t averageResultSize = 0;
-            int last_prog = 0;
             for(size_t i = 0; i<searchSet->numSearches; i++) {
-                float progress =  ((float) i/searchSet->numSearches) * 100.0f;
-                if(progress > last_prog){
-                    last_prog++;
-                    std::cout << last_prog << "% done" << std::endl;
-                }
                 auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
                 averageResultSize += result.size();
                 if(check)

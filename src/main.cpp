@@ -125,19 +125,18 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile, const float radius)
   checkVectorMemory(points);
 
   // Generate a shared search set for each benchmark execution
-  std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(points, false);
 
   // In this benchmark we only do one radii and one kernel, because otherwise it would be too much
   // and we are only interested in the difference between sequential and shuffled points
-  std::cout << "Running search over sequential search set of size" << searchSetSeq->numSearches << std::endl;
-  runSingleKernelRadiiBenchmark<LinearOctree, Point_t, Encoder_t, kernel>(outputFile, points, searchSetSeq, radius, "Sequential");
-  // free memory from this first sequential execution since we don't need it anymore
-  searchSetSeq->searchPoints.clear();
-  searchSetSeq->searchKNNLimits.clear();
-  
-  std::shared_ptr<const SearchSet> searchSetShuffle = std::make_shared<const SearchSet>(points, true);
+  std::shared_ptr<SearchSet> searchSetShuffle = std::make_shared<SearchSet>(points, true);
   std::cout << "Running search over shuffled search set of size " << searchSetShuffle->numSearches << std::endl;
   runSingleKernelRadiiBenchmark<LinearOctree, Point_t, Encoder_t, kernel>(outputFile, points, searchSetShuffle, radius, "Shuffled");
+  searchSetShuffle->searchPoints.clear();
+  searchSetShuffle->searchKNNLimits.clear();
+
+  std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(points, false);
+  std::cout << "Running search over sequential search set of size" << searchSetSeq->numSearches << std::endl;
+  runSingleKernelRadiiBenchmark<LinearOctree, Point_t, Encoder_t, kernel>(outputFile, points, searchSetSeq, radius, "Sequential");
 }
 
 int main(int argc, char *argv[]) {
@@ -165,15 +164,7 @@ int main(int argc, char *argv[]) {
   if (!outputFile.is_open()) {
       throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
   }
-  /*
-    // Compare linear and pointer octree, both encoded with Hilbert and Morton SFC order
-    searchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-    searchBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
 
-    // Baseline with no encoder (only pointer-based octree)
-    searchBenchmark<Lpoint64, PointEncoding::NoEncoder>(outputFile);
-  */
-  
   switch(mainOptions.benchmarkMode) {
     case BenchmarkMode::SEARCH:
       searchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
@@ -188,5 +179,6 @@ int main(int argc, char *argv[]) {
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile, 5.0);
     break;
   }
+
   return EXIT_SUCCESS;
 }
