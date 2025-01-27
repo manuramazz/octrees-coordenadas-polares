@@ -22,26 +22,19 @@ namespace fs = std::filesystem;
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, mainOptions.numSearches, searchSet, outputFile, mainOptions.checkResults, comment);
-  ob.searchBench(mainOptions.benchmarkRadii, REPEATS, mainOptions.numSearches);
+  std::shared_ptr<const SearchSet> searchSet, std::string comment = "", bool useParallel = true) {
+  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, mainOptions.numSearches, searchSet, outputFile, 
+     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
+  ob.searchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
 }
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::string comment = "") {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, mainOptions.numSearches, searchSet, outputFile, mainOptions.checkResults, comment);
-  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, REPEATS, mainOptions.numSearches);
-  return ob.getResultSet();
-}
-
-template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t, Kernel_t kernel>
-std::shared_ptr<ResultSet<Point_t>> runSingleKernelRadiiBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, const float radius, std::string comment = "") {
-  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, mainOptions.numSearches, searchSet, outputFile, mainOptions.checkResults, comment);
-  // only 1 repeat and no warmup
-  ob.template benchmarkSearchNeighSeq<kernel>(1, radius);
+  std::shared_ptr<const SearchSet> searchSet, std::string comment = "", bool useParallel = true) {
+  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, mainOptions.numSearches, searchSet, outputFile, 
+     comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
+  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
 }
 
@@ -105,15 +98,11 @@ void searchImplComparisonBenchmark(std::ofstream &outputFile) {
 }
 
 /**
- * Runs neighSearch for every point in the point cloud, comparing the performance 
- * of sequential vs shuffled searchSets due to cache losses.
- * 
- * Only uses one kernel and one radii to not make the benchmark too long.
- * 
- * Uses LinearOctree
+ * Runs the search benchmark for both sequential slices and random points
+ * The start point for the sequential slice is chosed at random from [0, points.size() - numSearches]
  */
 template <PointType Point_t, typename Encoder_t, Kernel_t kernel>
-void sequentialVsShuffleBenchmark(std::ofstream &outputFile, const float radius) {
+void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   TimeWatcher tw;
   tw.start();
   auto points = readPointCloud<Point_t>(mainOptions.inputFile);
@@ -124,19 +113,17 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile, const float radius)
             << " seconds\n";
   checkVectorMemory(points);
 
-  // Generate a shared search set for each benchmark execution
-
-  // In this benchmark we only do one radii and one kernel, because otherwise it would be too much
-  // and we are only interested in the difference between sequential and shuffled points
-  std::shared_ptr<SearchSet> searchSetShuffle = std::make_shared<SearchSet>(points, true);
-  std::cout << "Running search over shuffled search set of size " << searchSetShuffle->numSearches << std::endl;
-  runSingleKernelRadiiBenchmark<LinearOctree, Point_t, Encoder_t, kernel>(outputFile, points, searchSetShuffle, radius, "Shuffled");
+  /**
+   * We do shuffle searchSet first since points are chosen at random and we don't care if they are already ordered
+   * by the encoder. We then do sequential searchSet with the points already sorted in encoder-order so they
+   * have the spatial locality, which is what we want to test.
+   */
+  std::shared_ptr<SearchSet> searchSetShuffle = std::make_shared<SearchSet>(mainOptions.numSearches, points);
+  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetShuffle, "shuffled");
   searchSetShuffle->searchPoints.clear();
   searchSetShuffle->searchKNNLimits.clear();
-
-  std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(points, false);
-  std::cout << "Running search over sequential search set of size" << searchSetSeq->numSearches << std::endl;
-  runSingleKernelRadiiBenchmark<LinearOctree, Point_t, Encoder_t, kernel>(outputFile, points, searchSetSeq, radius, "Sequential");
+  std::shared_ptr<SearchSet> searchSetSeq = std::make_shared<SearchSet>(mainOptions.numSearches, points, true);
+  runSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSetSeq, "sequential");
 }
 
 int main(int argc, char *argv[]) {
@@ -176,7 +163,7 @@ int main(int argc, char *argv[]) {
       searchImplComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
     break;
     case BenchmarkMode::SEQUENTIAL:
-      sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile, 5.0);
+      sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);
     break;
   }
 

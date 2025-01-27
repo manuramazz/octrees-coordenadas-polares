@@ -1,30 +1,23 @@
-//
-// Created by miguelyermo on 11/3/20.
-//
-
 #include "main_options.hpp"
-
-#include <cmath>
-#include <filesystem>
-#include <vector>
-
-namespace fs = std::filesystem;
+#include <sstream>
+#include <cstdlib>
 
 main_options mainOptions{};
 
 void printHelp()
 {
 	std::cout
-	    << "-h: Show this message\n"
-	       "-i: Path to input file\n"
-	       "-o: Path to output file\n"
-	       "-r: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
-	       "-s: Number of searches\n"
-	       "-c: Enable result checking\n"
-		   "-b: Benchmark to run: -b srch for search (default), -b comp for impl. comparison, -b seq for sequential vs shuffled points\n";
+		<< "-h, --help: Show this message\n"
+		   "-i: Path to input file\n"
+		   "-o: Path to output file\n"
+		   "-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
+		   "-s, --searches: Number of searches\n"
+		   "-t, --repeats: Number of repeats\n"
+		   "-c, --check: Enable result checking\n"
+		   "-b, --benchmark: Benchmark to run: 'srch' for search (default), 'comp' for comparison, 'seq' for sequential vs shuffled points\n"
+		   "    --no-warmup: Disable warmup phase\n";
 	exit(1);
 }
-
 
 void setDefaults()
 {
@@ -51,60 +44,62 @@ void processArgs(int argc, char** argv)
 	{
 		const auto opt = getopt_long(argc, argv, short_opts, long_opts, nullptr);
 
-		if (-1 == opt) { break; }
+		if (opt == -1) { break; } // No more options to process
 
 		switch (opt)
 		{
-				// Short Options
-			case 'h': {
+			case 'h':
+			case LongOptions::HELP:
 				printHelp();
 				break;
-			}
-			case 'i': {
+
+			case 'i':
 				mainOptions.inputFile = fs::path(std::string(optarg));
-				std::cout << "Read file set to: " << mainOptions.inputFile << "\n";
 				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
-			}
-			case 'o': {
+
+			case 'o':
 				mainOptions.outputDirName = fs::path(std::string(optarg));
-				std::cout << "Output path set to: " << mainOptions.outputDirName << "\n";
 				break;
-			}
-			case 'r': {
+
+			case 'r':
+			case LongOptions::RADII:
 				mainOptions.benchmarkRadii = parseRadii(std::string(optarg));
-				std::cout << "Benchmark radii set to: ";
-				for (const auto& r : mainOptions.benchmarkRadii) std::cout << r << " ";
-				std::cout << "\n";
 				break;
-			}
-			case 's': {
+
+			case 't':
+			case LongOptions::REPEATS:
+				mainOptions.repeats = std::stoul(std::string(optarg));
+				break;
+
+			case 's':
+			case LongOptions::SEARCHES:
 				mainOptions.numSearches = std::stoul(std::string(optarg));
-				std::cout << "Number of searches set to: " << mainOptions.numSearches << "\n";
 				break;
-			}
-			case 'c': {
+
+			case 'c':
+			case LongOptions::CHECK:
 				mainOptions.checkResults = true;
-				std::cout << "Result checking enabled\n";
 				break;
-			}
-			case 'b': {
-				std::string mode = std::string(optarg);
-				if (mode == "srch") {
-					mainOptions.benchmarkMode = BenchmarkMode::SEARCH;
-					std::cout << "Benchmark mode set to: Linear Octree vs Octree in neighSearch and numNeighSearch\n";
-				} else if (mode == "comp") {
-					mainOptions.benchmarkMode = BenchmarkMode::COMPARE;
-					std::cout << "Benchmark mode set to: Comparisons of implementations of neighSearch and numNeighSearch inside LinearOctree\n";
-				} else if (mode == "seq") {
-					mainOptions.benchmarkMode = BenchmarkMode::SEQUENTIAL;
-					std::cout << "Benchmark mode set to: Sequential vs Shuffled search sets performance comparison\n";
+
+			case 'b':
+			case LongOptions::BENCHMARK:
+				if (std::string(optarg) == "srch") {
+					mainOptions.benchmarkMode = SEARCH;
+				} else if (std::string(optarg) == "comp") {
+					mainOptions.benchmarkMode = COMPARE;
+				} else if (std::string(optarg) == "seq") {
+					mainOptions.benchmarkMode = SEQUENTIAL;
 				} else {
-					std::cerr << "Invalid benchmark mode: " << mode << "\n";
+					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();
 				}
 				break;
-			}
+
+			case LongOptions::NO_WARMUP:
+				mainOptions.useWarmup = false;
+				break;
+
 			case '?': // Unrecognized option
 			default:
 				printHelp();
