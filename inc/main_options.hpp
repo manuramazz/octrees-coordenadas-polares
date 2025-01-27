@@ -20,7 +20,7 @@ public:
 
 	// Benchmark parameters
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
-	size_t repeats{5};
+	size_t repeats{2};
 	size_t numSearches{10000};
 	bool checkResults{false};
 	bool useWarmup{true};

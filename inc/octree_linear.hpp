@@ -752,7 +752,7 @@ public:
                     // Completely inside, all add points except center and prune
                     size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
                     size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                    for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; it++) {
+                    for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
                         if ((*it).id() != center_id) {
                             ptsInside.push_back(&(*it));
                         }
@@ -774,7 +774,7 @@ public:
             uint32_t leafIdx = this->internalToLeaf[nodeIndex];
             auto start = this->points.begin() + this->layout[leafIdx];
             auto end = this->points.begin() + this->layout[leafIdx+1];
-            for (auto it = start; it != end; it++) {
+            for (auto it = start; it != end; ++it) {
                 if (k.isInside(*it) && (*it).id() != center_id) {
                     ptsInside.push_back(&(*it));
                 }
@@ -826,7 +826,7 @@ public:
             auto start = this->points.begin() + this->layout[leafIdx];
             auto end = this->points.begin() + this->layout[leafIdx+1];
             // std::cout << " leafIndex = " << leafIdx << " with bounds: " << this->layout[leafIdx] << ", " << this->layout[leafIdx+1] << std::endl;
-            for (auto it = start; it != end; it++) {
+            for (auto it = start; it != end; ++it) {
                 if (k.isInside(*it)) {
                     // std::cout << "  added point " << (*it).id() << std::endl;
                     ptsInside++;
