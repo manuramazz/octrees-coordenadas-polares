@@ -143,10 +143,9 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
 int main(int argc, char *argv[]) {
   setDefaults();
   processArgs(argc, argv);
-  
   fs::path inputFile = mainOptions.inputFile;
   std::string fileName = inputFile.stem();
-
+  
   if (!mainOptions.outputDirName.empty()) {
     mainOptions.outputDirName = mainOptions.outputDirName / fileName;
   }

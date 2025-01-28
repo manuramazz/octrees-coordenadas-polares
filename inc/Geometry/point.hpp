@@ -15,14 +15,14 @@ inline constexpr float SENSEPSILON = 0.001; // Sensible epsilon
 using Vector = class Point; // Point and Vector are exactly the same entity, but this is done
                             // to preserve mathematical correctness
 
-class Point
+class alignas(32) Point
 {
 	protected:
 	double       x_{};  // X Coordinate
 	double       y_{};  // Y Coordinate
 	double       z_{};  // Z Coordinate
 	unsigned int id_{}; // Id of the point (in order of reading)
-
+	unsigned int unused_{}; // For 32 byte alignment
 
 	public:
 	Point() = default;

@@ -114,5 +114,5 @@ for dataset in "${datasets_search_1[@]}"; do
         echo "Error: File not found - $dataset"
         exit 1
     fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/point_comp" -r "0.5,0.75,1.0"
+    ./build/rule-based-classifier-cpp -i "$dataset" -b "pt" -o "out/point_comp" -r "0.5,1.0,2.5,5.0"
 done
