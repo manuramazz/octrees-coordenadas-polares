@@ -26,6 +26,12 @@ datasets_algo_comp=(
     "data/dales_las/test/5135_54435.las"
 )
 
+# Some quick benchmarks with a single radius
+./build/rule-based-classifier-cpp -i "data/speulderbos/Speulderbos_2017_TLS.las"                    -o "out" -r "1.0"    -b "srch" -t 3 
+# ./build/rule-based-classifier-cpp -i "data/paris_lille/Lille_0.las"                    -o "out" -r "2.5"    -b "srch" -t 3 
+# ./build/rule-based-classifier-cpp -i "data/dales_las/test/5135_54435.las"              -o "out" -r "10.0"   -b "srch" -t 3 
+# ./build/rule-based-classifier-cpp -i "data/semantic3d/sg27_station8_intensity_rgb.txt" -o "out" -r "0.5"    -b "srch" -t 3 
+
 ##### REGULAR BENCHMARK
 # for dataset in "${datasets_search_1[@]}"; do
 #     if [[ ! -f "$dataset" ]]; then
@@ -105,10 +111,10 @@ datasets_algo_comp=(
 # done
 
 #### POINT TYPE COMPARISONS
-for dataset in "${datasets_search_1[@]}"; do
-    if [[ ! -f "$dataset" ]]; then
-        echo "Error: File not found - $dataset"
-        exit 1
-    fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -b "pt" -o "out/point_comp" -r "0.5,1.0,2.5,5.0"
-done
+# for dataset in "${datasets_search_1[@]}"; do
+#     if [[ ! -f "$dataset" ]]; then
+#         echo "Error: File not found - $dataset"
+#         exit 1
+#     fi
+#     ./build/rule-based-classifier-cpp -i "$dataset" -b "pt" -o "out/point_comp" -r "0.5,1.0,2.5,5.0"
+# done
