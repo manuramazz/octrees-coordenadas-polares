@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
     break;
     case BenchmarkMode::COMPARE:
       searchImplComparisonBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-      searchImplComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
+      // searchImplComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
     break;
     case BenchmarkMode::SEQUENTIAL:
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Geometry/point.hpp"
+#include "Geometry/Box.hpp"
 
 class KernelAbstract
 /**
@@ -58,4 +59,9 @@ class KernelAbstract
 	// Checks if box is entirely within kernel
 	[[nodiscard]] virtual IntersectionJudgement boxIntersect(const Point& center, double radius) const = 0;
 	[[nodiscard]] virtual IntersectionJudgement boxIntersect(const Point& center, const Vector& radii) const = 0;
+
+	// Encode all corners of the bounding box
+	template <typename Encoder_t>
+	[[nodiscard]] std::pair<typename Encoder_t::key_t, typename Encoder_t::key_t> encodeBounds(const Box& bbox) const; 
+
 };

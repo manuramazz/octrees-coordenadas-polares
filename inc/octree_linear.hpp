@@ -774,6 +774,7 @@ public:
     [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
         std::vector<Point_t*> ptsInside;
         auto center_id = k.center().id();
+        auto kernel_bounds = k.template encodeBounds<Encoder_t>(bbox);
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];

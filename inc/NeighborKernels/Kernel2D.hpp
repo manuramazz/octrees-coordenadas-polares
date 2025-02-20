@@ -6,6 +6,7 @@
 #define KERNEL2D_HPP
 
 #include "KernelAbstract.hpp"
+#include "PointEncoding/common.hpp"
 
 class Kernel2D : public KernelAbstract
 {
@@ -40,6 +41,18 @@ class Kernel2D : public KernelAbstract
 		return true;
 	}
 
+	template <typename Encoder>
+	[[nodiscard]] std::pair<typename Encoder::key_t, typename Encoder::key_t> encodeBounds(const Box& bbox) const {
+		typename Encoder::coords_t x, y, z;
+		typename Encoder::key_t encodedMin, encodedMax;
+		Point realBoxMin = Point(boxMin().getX(), boxMin().getY(), bbox.minZ());
+		Point realBoxMax = Point(boxMax().getX(), boxMax().getY(), bbox.maxZ());
+		PointEncoding::getAnchorCoords<Encoder>(realBoxMin, bbox, x, y, z);
+		encodedMin = Encoder::encode(x, y, z);
+		PointEncoding::getAnchorCoords<Encoder>(realBoxMax, bbox, x, y, z);
+		encodedMax = Encoder::encode(x, y, z);
+		return std::make_pair(encodedMin, encodedMax);
+	}
 };
 
 #endif /* end of include guard: KERNEL2D_HPP */

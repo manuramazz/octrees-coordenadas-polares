@@ -85,6 +85,8 @@ class KernelCube : public Kernel3D
 
 		return KernelAbstract::IntersectionJudgement::OVERLAP;
 	}
+
+
 };
 
 
