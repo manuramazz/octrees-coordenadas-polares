@@ -54,7 +54,7 @@ std::shared_ptr<ResultSet<Point_t>> runSearchImplComparisonBenchmark(std::ofstre
   std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.searchPtrVsCopyBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
+  ob.searchImplComparisonBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches);
   return ob.getResultSet();
 }
 
@@ -121,7 +121,7 @@ void searchImplComparisonBenchmark(std::ofstream &outputFile) {
 
   // Check the results if needed
   if(mainOptions.checkResults) {
-    results->checkResultsPtrVsCopy();
+    results->checkResultsAlgo();
   }
 }
 
@@ -238,7 +238,6 @@ int main(int argc, char *argv[]) {
     break;
     case BenchmarkMode::COMPARE:
       searchImplComparisonBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
-      // searchImplComparisonBenchmark<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
     break;
     case BenchmarkMode::SEQUENTIAL:
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D, Kernel_t::sphere>(outputFile);
