@@ -259,7 +259,7 @@ struct ResultSet {
         }
     }
     
-    void checkResultsApproximateSearches(size_t printingLimit = 10) {
+    void checkResultsApproxSearches(size_t printingLimit = 10) {
         if (resultsSearchApproxLower.empty() || resultsSearchApproxUpper.empty() || resultsNeigh.empty()) {
             std::cout << "Approximate searches results were not computed! Not checking approximation results.\n";
             return;
@@ -464,10 +464,10 @@ class OctreeBenchmark {
         }
 
         inline void appendToCsv(const std::string& operation, 
-                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, size_t averageResultSize = 0) {
+                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, size_t averageResultSize = 0, double tolerancePercentage = 0.0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size\n";
+                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage\n";
             }
             // append the comment to the octree name if needed
             std::string octreeName;
@@ -497,7 +497,9 @@ class OctreeBenchmark {
                 << stats.stdev() << ','
                 << stats.usedWarmup() << ','
                 << stats.warmupValue() << ','
-                << averageResultSize << std::endl;
+                << averageResultSize << ','
+                << tolerancePercentage 
+                << std::endl;
         }
 
     public:
@@ -530,10 +532,10 @@ class OctreeBenchmark {
         }
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeighApproximate(size_t repeats, float radius, double tolerancePercentage, bool upperBound) {
+        void benchmarkSearchNeighApprox(size_t repeats, float radius, double tolerancePercentage, bool upperBound) {
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighApprox<kernel>(radius, tolerancePercentage, upperBound); }, useWarmup);
-            appendToCsv(std::string("neighSearchApprox") + (upperBound ? "Upper" : "Lower"), kernelStr, radius, stats, averageResultSize);
+            appendToCsv(std::string("neighSearchApprox") + (upperBound ? "Upper" : "Lower"), kernelStr, radius, stats, averageResultSize, tolerancePercentage);
         }
 
         template<Kernel_t kernel>
@@ -603,13 +605,13 @@ class OctreeBenchmark {
             
             std::cout << std::endl;
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << "Progress"    << std::setw(LOG_FIELD_WIDTH/2) << "Completed at" 
-                                   << std::setw(LOG_FIELD_WIDTH) << "Method"      << std::setw(LOG_FIELD_WIDTH/2) << "Radius" << std::endl;
+                                   << std::setw(LOG_FIELD_WIDTH*1.5) << "Method"      << std::setw(LOG_FIELD_WIDTH/2) << "Radius" << std::endl;
         }
 
         static void printBenchmarkUpdate(const std::string &method, const size_t totalExecutions, size_t &currentExecution, const float radius) {
             const std::string progress_str = "(" + std::to_string(currentExecution) + "/" + std::to_string(totalExecutions) + ")";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << progress_str  << std::setw(LOG_FIELD_WIDTH/2) << getCurrentDate("[%H:%M:%S]") 
-                                   << std::setw(LOG_FIELD_WIDTH) << method        << std::setw(LOG_FIELD_WIDTH/2) << radius << std::endl;
+                                   << std::setw(LOG_FIELD_WIDTH*1.5) << method        << std::setw(LOG_FIELD_WIDTH/2) << radius << std::endl;
             currentExecution++;
         }
 
@@ -685,16 +687,17 @@ class OctreeBenchmark {
             std::cout << std::endl;
         }
 
-        void approximateSearchesBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches, double tolerancePercentage) {
-            printBenchmarkLog(std::string("Approximate searches with low and high bounds, with ") + std::to_string(tolerancePercentage) + std::string(" % tolerance"), 
-                benchmarkRadii, repeats, numSearches);
-            size_t total = benchmarkRadii.size();
+        void approxSearchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches, const std::vector<double> tolerancePercentages) {
+            printBenchmarkLog("Approximate searches with low and high bounds", benchmarkRadii, repeats, numSearches);
+            size_t total = benchmarkRadii.size() * tolerancePercentages.size();
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
                 benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
-                benchmarkSearchNeighApproximate<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentage, false);
-                benchmarkSearchNeighApproximate<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentage, true);
-                printBenchmarkUpdate("Approx. neighbor search", total, current, benchmarkRadii[i]);
+                for(size_t j = 0; j<tolerancePercentages.size(); j++) {
+                    benchmarkSearchNeighApprox<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentages[j], false);
+                    benchmarkSearchNeighApprox<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentages[j], true);
+                    printBenchmarkUpdate(std::string("Approx. neighSearch with tol = ") + std::to_string(tolerancePercentages[j]) + std::string("%"), total, current, benchmarkRadii[i]);
+                }
             }
         }
 

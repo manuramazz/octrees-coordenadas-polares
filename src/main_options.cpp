@@ -21,7 +21,7 @@ void printHelp()
 		   "'approx' for approximate searches comparison\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
 		   "--no-warmup: Disable warmup phase\n"
-		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size)\n";
+		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n";
 	exit(1);
 }
 
@@ -31,17 +31,18 @@ void setDefaults()
 	mainOptions.benchmarkMode = BenchmarkMode::SEARCH;
 }
 
-std::vector<float> parseRadii(const std::string& radiiStr)
+template <typename T>
+std::vector<T> readVectorArg(const std::string& vStr)
 {
-	std::vector<float> radii;
-	std::stringstream ss(radiiStr);
+	std::vector<T> v;
+	std::stringstream ss(vStr);
 	std::string token;
 
 	while (std::getline(ss, token, ',')) {
-		radii.push_back(std::stof(token));
+		v.push_back(std::stof(token));
 	}
 
-	return radii;
+	return v;
 }
 
 void processArgs(int argc, char** argv)
@@ -70,7 +71,7 @@ void processArgs(int argc, char** argv)
 
 			case 'r':
 			case LongOptions::RADII:
-				mainOptions.benchmarkRadii = parseRadii(std::string(optarg));
+				mainOptions.benchmarkRadii = readVectorArg<float>(std::string(optarg));
 				break;
 
 			case 't':
@@ -111,8 +112,9 @@ void processArgs(int argc, char** argv)
 			case LongOptions::NO_WARMUP:
 				mainOptions.useWarmup = false;
 				break;
-			case LongOptions::APPROXIMATE_TOLERANCE:
-				mainOptions.approximateTolerance = std::stod(std::string(optarg));
+			case LongOptions::APPROXIMATE_TOLERANCES:
+				mainOptions.approximateTolerances = readVectorArg<double>(std::string(optarg));
+
 				break;
 			case '?': // Unrecognized option
 			default:

@@ -50,12 +50,12 @@ std::shared_ptr<ResultSet<Point_t>> runSearchBenchmark(std::ofstream &outputFile
 }
 
 template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
-std::shared_ptr<ResultSet<Point_t>> runApproximateSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
-  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, double tolerancePercentage = 0.1,
+std::shared_ptr<ResultSet<Point_t>> runApproxSearchBenchmark(std::ofstream &outputFile, std::vector<Point_t>& points,
+  std::shared_ptr<const SearchSet> searchSet, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt,
   std::string comment = "", bool useParallel = true) {
   OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, metadata, mainOptions.numSearches, searchSet, outputFile, 
      comment, mainOptions.checkResults, mainOptions.useWarmup, useParallel);
-  ob.approximateSearchesBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches, tolerancePercentage);
+  ob.approxSearchBench(mainOptions.benchmarkRadii, mainOptions.repeats, mainOptions.numSearches, mainOptions.approximateTolerances);
   return ob.getResultSet();
 }
 
@@ -162,7 +162,7 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
 }
 
 template <PointType Point_t, typename Encoder_t>
-void approximateSearchBenchmark(std::ofstream &outputFile) {
+void approxSearchBenchmark(std::ofstream &outputFile) {
   TimeWatcher tw;
   tw.start();
   // if Point_t == Point, we run readPointCloudMeta
@@ -179,9 +179,9 @@ void approximateSearchBenchmark(std::ofstream &outputFile) {
   pointCloudReadLog(points, tw);
 
   std::shared_ptr<const SearchSet> searchSet = std::make_shared<const SearchSet>(mainOptions.numSearches, points);
-  auto results = runApproximateSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata, mainOptions.approximateTolerance);
+  auto results = runApproxSearchBenchmark<LinearOctree, Point_t, Encoder_t>(outputFile, points, searchSet, metadata);
   if(mainOptions.checkResults)
-    results->checkResultsApproximateSearches();
+    results->checkResultsApproxSearches();
 }
 
 template <PointType Point_t>
@@ -281,7 +281,7 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Lpoint, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::APPROX:
-      approximateSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      approxSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
       linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);

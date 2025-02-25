@@ -25,7 +25,7 @@ public:
 	bool checkResults{false};
 	bool useWarmup{true};
 	BenchmarkMode benchmarkMode{SEARCH};
-	double approximateTolerance = 50.0;
+	std::vector<double> approximateTolerances{50.0};
 };
 
 extern main_options mainOptions;
@@ -39,7 +39,7 @@ enum LongOptions : int
 	CHECK,
 	BENCHMARK,
 	NO_WARMUP,
-	APPROXIMATE_TOLERANCE
+	APPROXIMATE_TOLERANCES
 };
 
 // Define short options
@@ -54,7 +54,7 @@ const option long_opts[] = {
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "benchmark", required_argument, nullptr, LongOptions::BENCHMARK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
-	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCE },
+	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
 	{ nullptr, 0, nullptr, 0 }
 };
 
