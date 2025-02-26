@@ -11,18 +11,28 @@
 
 /**
  * @namespace PointEncoding
- * @brief Namespace for point encoding utilities such as Morton and Hilbert SFC encoding and aux functions to extract information from keys.
+ * @brief Namespace for point encoding utilities such as Morton and Hilbert SFC encoding and other functions to extract information from keys.
  */
 namespace PointEncoding {
 
     /**
      * @struct NoEncoder
      * @brief A dummy encoder that does nothing. Used for indicating that pointer octrees points have not encoded and sorted in the corresponding order.
+     * Using this with Linear Octrees will not compile, as they need the specific functions and types defined on the actual encoders.
      */
     struct NoEncoder { };
     
     /**
      * @brief Get anchor integer coordinates for a point within a bounding box. Necessary before point encoding.
+     * 
+     * @details Anchor coordinates are a set of 3 integers (x,y,z) obtained from the coordinates of a point p (p.x, p.y, p.z). The process goes as follows:
+     * 1. The floats p.x, p.y, p.z are normalized into the unit cube [0,1]x[0,1]x[0,1] using the given bounding box coordinates
+     * 2. These normalized coordinates are scaled again into the bigger cube [0,2^L]x[0,2^L]x[0,2^L] where L is the maximum depth of the encoder (for 3D
+     * Hilbert and Morton encodings, L=21) 
+     * 3. Convert those scaled floats into ints via floor implicit conversion
+     * 
+     * The output is (x,y,z) each, in the range 0 to 2^L. If L=21, the total amount of bits will be 63, which will be the input of the encoding funcions for 3D Morton
+     * and Hilbert codes, that use 64-bit keys.
      * 
      * @param p The point.
      * @param bbox The global bounding box of the point cloud.
@@ -42,6 +52,7 @@ namespace PointEncoding {
         z = std::min((typename Encoder::coords_t) (z_transf * (1 << (Encoder::MAX_DEPTH))), maxCoord);
     }
 
+    /// @brief A wrapper for doing PointEncoding::getAnchorCoords + Encoder::encode in one single step     
     template <typename Encoder>
     inline typename Encoder::key_t encodeFromPoint(const Point& p, const Box &bbox) {
         typename Encoder::coords_t x, y, z;
@@ -49,6 +60,80 @@ namespace PointEncoding {
 		return Encoder::encode(x, y, z);
     }
 
+
+    /**
+     * @brief This function computes the encodings of the points and sorts them in
+     * the given order. The points array is altered in-place here!
+     * 
+     * @details This is the main reordering function that we use to achieve spatial locality during neighbourhood
+     * searches. Encodings are first computed using encodeFromPoint, put into a pairs vector and then reordered.
+     * 
+     * @param points The input/output array of 3D points (i.e. the point cloud)
+     * @param codes The output array of computed codes (allocated here, only pass unallocated reference)
+     * @param bbox The precomputed global bounding box of points
+     */
+    template <typename Encoder, typename Point_t>
+    void sortPoints(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, const Box &bbox) {
+        // Temporal vector of pairs
+        // TODO: find a better way, since this consumes a lot of extra memory 
+        std::vector<std::pair<typename Encoder::key_t, Point_t>> encoded_points(points.size());
+
+        // Compute encodings in parallel
+        // TODO: look into better omp schedules for this
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                encoded_points[i] = std::make_pair(encodeFromPoint<Encoder>(points[i], bbox), points[i]);
+            }
+
+        // TODO: implement parallel radix sort and stop using vector of pairs if possible (only sort the encodings)
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes and points in parallel
+        // TODO: look into better omp schedules for this
+        codes.resize(points.size());
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                codes[i] = encoded_points[i].first;
+                points[i] = encoded_points[i].second;
+            }
+    }
+
+    /**
+     * @brief A similar function to @see sortPoints(), but here the LiDAR metadata of the points is passed separately, and a tuple of 3 elements is sorted instead
+     * of a pair. 
+     * 
+     */
+    template <typename Encoder, typename Point_t>
+    void sortPointsMetadata(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, std::vector<PointMetadata> &metadata, const Box &bbox) {
+        // Temporal vector of 3-tuples
+        // TODO: find a better way, since this consumes a lot of extra memory 
+        std::vector<std::tuple<typename Encoder::key_t, Point_t, PointMetadata>> encoded_points(points.size());
+
+        // Compute encodings in parallel
+        // TODO: look into better omp schedules for this
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                encoded_points[i] = std::make_tuple(encodeFromPoint<Encoder>(points[i], bbox), points[i], metadata[i]);
+            }
+        
+        // TODO: implement parallel radix sort and stop using vector of tuples if possible (only sort the encodings)
+        std::sort(encoded_points.begin(), encoded_points.end(),
+            [](const auto& a, const auto& b) {
+                return std::get<0>(a) < std::get<0>(b);  // Compare only the morton codes
+        });
+        
+        // Copy back sorted codes, points, and metadata in parallel
+        // TODO: look into better omp schedules for this
+        codes.resize(points.size());
+        #pragma omp parallel for
+            for(size_t i = 0; i < points.size(); i++) {
+                std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
+            }
+    }
+    
     /**
      * @brief Get the center and radii of an octant at a given octree level.
      * 
@@ -83,7 +168,7 @@ namespace PointEncoding {
         return {center, precomputedRadii[level]};
     }
 
-    /// @brief Count the leading zeros in a key.
+    /// @brief Count the leading zeros in a binary key.
     template <typename Encoder>
     constexpr uint32_t countLeadingZeros(typename Encoder::key_t x)
     {
@@ -111,7 +196,7 @@ namespace PointEncoding {
         return lz % 3 == 0 && !(n & (n - 1));
     }
 
-    /// @brief Get the level in the octree of the given morton code
+    /// @brief Get the level in the octree from a given morton code
     template <typename Encoder>
     inline uint32_t getLevel(typename Encoder::key_t range) {
         assert(isPowerOf8<Encoder>(range));
@@ -199,66 +284,4 @@ namespace PointEncoding {
         uint32_t lz = countLeadingZeros<Encoder>(n - typename Encoder::key_t(1));
         return Encoder::MAX_DEPTH - (lz - Encoder::UNUSED_BITS) / 3;
     }
-
-    /**
-     * @brief This function computes the morton encodings of the points and sorts them in
-     * the given order
-     * 
-     * @details The points array is changed after this step
-     */
-    template <typename Encoder, typename Point_t>
-    void sortPoints(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, const Box &bbox) {
-        // Temporal vector of pairs
-        std::vector<std::pair<typename Encoder::key_t, Point_t>> encoded_points(points.size());
-
-        // Compute encodings in parallel
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                typename Encoder::coords_t x, y, z;
-                PointEncoding::getAnchorCoords<Encoder>(points[i], bbox, x, y, z);
-                encoded_points[i] = std::make_pair(Encoder::encode(x, y, z), points[i]);
-            }
-
-        // TODO: implement parallel radix sort
-        std::sort(encoded_points.begin(), encoded_points.end(),
-            [](const auto& a, const auto& b) {
-                return a.first < b.first;  // Compare only the morton codes
-        });
-        
-        // Copy back sorted codes and points in parallel
-        codes.resize(points.size());
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                codes[i] = encoded_points[i].first;
-                points[i] = encoded_points[i].second;
-            }
-    }
-
-    template <typename Encoder, typename Point_t>
-    void sortPointsMetadata(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, std::vector<PointMetadata> &metadata, const Box &bbox) {
-        // Temporal vector of pairs
-        std::vector<std::tuple<typename Encoder::key_t, Point_t, PointMetadata>> encoded_points(points.size());
-
-        // Compute encodings in parallel
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                typename Encoder::coords_t x, y, z;
-                PointEncoding::getAnchorCoords<Encoder>(points[i], bbox, x, y, z);
-                encoded_points[i] = std::make_tuple(Encoder::encode(x, y, z), points[i], metadata[i]);
-            }
-        
-        // TODO: implement parallel radix sort
-        std::sort(encoded_points.begin(), encoded_points.end(),
-            [](const auto& a, const auto& b) {
-                return std::get<0>(a) < std::get<0>(b);  // Compare only the morton codes
-        });
-        
-        // Copy back sorted codes, points, and metadata in parallel
-        codes.resize(points.size());
-        #pragma omp parallel for
-            for(size_t i = 0; i < points.size(); i++) {
-                std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
-            }
-    }
-
 }

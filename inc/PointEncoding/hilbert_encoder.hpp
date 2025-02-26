@@ -13,12 +13,15 @@ namespace PointEncoding {
     * 
     * @date 11/12/2024
     * 
-    * @cite https://doi.org/10.1016/j.newast.2016.10.007 Appendix A
+    * @cite https://doi.org/10.1016/j.newast.2016.10.007 Appendix A contains the algorithm used here
     * @cite https://www.semanticscholar.org/paper/A-class-of-fast-algorithms-for-the-Peano-Hilbert-Lam-Shapiro/2e2987a5070f79f8a94f110a3a2862cc98c94de3 
+    * contains a great general explanation
     */
     struct HilbertEncoder3D {
-        using key_t = uint64_t;
-        using coords_t = uint32_t;
+        /// @brief The type for the output keys
+        using key_t = uint_fast64_t;
+        /// @brief the type for the input coordinates
+        using coords_t = uint_fast32_t;
                 
         /// @brief The maximum depth that this encoding allows (in Hilbert 64 bit integers, we need 3 bits for each level, so 21)
         static constexpr uint32_t MAX_DEPTH = 21;
@@ -35,7 +38,11 @@ namespace PointEncoding {
         /// @brief A constant array to map adequately rotated x, y, z coordinates to their corresponding octant 
         static constexpr coords_t mortonToHilbert[8] = {0, 1, 3, 2, 7, 6, 4, 5};
         
-        /// @brief Encodes the given coordinates into their Hilbert key
+        /**
+         * @brief Encodes the given integer coordinates in the range [0,2^MAX_DEPTH]x[0,2^MAX_DEPTH]x[0,2^MAX_DEPTH] into their Hilbert key
+         * The algorithm is described in the citations above but consists on something similar to the intertwinement of bits of Morton codes 
+         * but with some extra rotations and reflections in each step.
+         */
         static inline key_t encode(coords_t x, coords_t y, coords_t z) {
             key_t key = 0;
             for(int level = MAX_DEPTH - 1; level >= 0; level--) {
@@ -73,7 +80,6 @@ namespace PointEncoding {
             for(int level = 0; level < MAX_DEPTH; level++) {
                 // Extract the octant from the key and put the bits into xi, yi and zi
                 const coords_t octant   = (code >> (3 * level)) & 7u;
-                // std::cout << " octant at level " << level << " is " << octant << std::endl;
                 const coords_t xi = octant >> 2u;
                 const coords_t yi = (octant >> 1u) & 1u;
                 const coords_t zi = octant & 1u;
