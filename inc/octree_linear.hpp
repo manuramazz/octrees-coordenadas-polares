@@ -13,6 +13,7 @@
 #include "Geometry/Box.hpp"
 #include "Geometry/PointMetadata.hpp"
 #include "type_names.hpp"
+#include "neigh_search_result.hpp"
 
 /**
 * @class LinearOctree
@@ -769,11 +770,9 @@ public:
             auto nodeRadii = this->radii[nodeIndex];
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
-                    // Completely inside, all add points except center and prune
+                    // Completely inside, all add points and prune
                     size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
                     size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-                    // Reserve memory for insertion, there can be a lot of points here. This didn't work well!
-                    // ptsInside.reserve(ptsInside.size() + endIndex - startIndex);
                     for (auto it = points.begin() + startIndex; it != points.begin() + endIndex; ++it) {
                         ptsInside.push_back(&(*it));
                     }
@@ -782,23 +781,21 @@ public:
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
                     // Overlaps but not inside, keep descending
                     return true;
-                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
-                    // Completely outside, prune
-                    return false;
                 default:
+                    // Completely outside, prune
                     return false;
             }
         };
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
-            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            key_t nodeKey = this->leaves[leafIdx];
-            auto start = this->points.begin() + this->layout[leafIdx];
-            auto end = this->points.begin() + this->layout[leafIdx+1];
-            // Amount of points in a leave should be small and only some of them will be inserted, so we don't need to reserve memory to iterate over them
-            for (auto it = start; it != end; ++it) {
-                if (k.isInside(*it)) {
-                    ptsInside.push_back(&(*it));
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr)) {
+                    ptsInside.push_back(startPtr);
                 }
             }
         };
@@ -806,6 +803,60 @@ public:
         singleTraversal(checkBoxIntersect, findAndInsertPoints);
         return ptsInside;
 	}
+
+    template<typename Kernel>
+    [[nodiscard]] NeighSearchResult<Point_t> neighborsStruct(const Kernel& k) {
+        NeighSearchResult<Point_t> result(points, internalLayoutRanges);
+        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->radii[nodeIndex];
+            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
+                case KernelAbstract::IntersectionJudgement::INSIDE: {
+                    // Completely inside, add octant to the result
+                    result.octantIndexes.push_back(nodeIndex);
+                    result.numberOfPoints += internalLayoutRanges[nodeIndex].second - internalLayoutRanges[nodeIndex].first;
+                    return false;
+                }
+                case KernelAbstract::IntersectionJudgement::OVERLAP:
+                    // Overlaps but not inside, keep descending
+                    return true;
+                default:
+                    // Completely outside, prune
+                    return false;
+            }
+        };
+        
+        auto findAndInsertPoints = [&](uint32_t nodeIndex) {
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+        
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr)) {
+                    result.extraPoints.push_back(startPtr);
+                    result.numberOfPoints++;
+                }
+            }
+        };
+        
+        singleTraversal(checkBoxIntersect, findAndInsertPoints);
+        return result;
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::square>
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsStruct(const Point& p, double radius) {
+		const auto kernel = kernelFactory<kernel_type>(p, radius);
+		return neighborsStruct(kernel);
+	}
+
+	template<Kernel_t kernel_type = Kernel_t::cube>
+	[[nodiscard]] inline NeighSearchResult<Point_t> searchNeighborsStruct(const Point& p, const Vector& radii) {
+		const auto kernel = kernelFactory<kernel_type>(p, radii);
+		return neighborsStruct(kernel);
+	}
+
 
     uint32_t getPrecisionLevel(const Vector &toleranceVector) const {
         assert(toleranceVector.getX() > 0 && toleranceVector.getY() > 0 && toleranceVector.getZ() > 0 && "tolerance vector must be >0 in every coordinate");
@@ -876,10 +927,8 @@ public:
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
                     // Overlaps but not inside, keep descending
                     return true;
-                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
-                    // Completely outside, prune
-                    return false;
                 default:
+                    // Completely outside, prune
                     return false;
             }
         };

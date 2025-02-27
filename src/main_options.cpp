@@ -19,6 +19,7 @@ void printHelp()
 		   "'comp' for comparison, 'seq' for sequential vs shuffled points,\n\t" 
 		   "'pt' for point type comparison,\n\t" 
 		   "'approx' for approximate searches comparison\n\t"
+		   "'struct' for comparing performance on raw vector returned vs structure with octants and extra points\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
 		   "--no-warmup: Disable warmup phase\n"
 		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n";
@@ -103,6 +104,8 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = LOG_OCTREE;
 				} else if(std::string(optarg) == "approx") {
 					mainOptions.benchmarkMode = APPROX;
+				} else if(std::string(optarg) == "struct") {
+					mainOptions.benchmarkMode = STRUCT;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();

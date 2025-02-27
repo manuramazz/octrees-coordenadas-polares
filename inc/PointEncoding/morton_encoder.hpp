@@ -43,7 +43,7 @@ namespace PointEncoding {
         }
 
         /// @brief Decodes the given Morton key and puts the coordinates into x, y, z
-        static inline void Poindecode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
+        static inline void decode(key_t code, coords_t &x, coords_t &y, coords_t &z) {
             libmorton::morton3D_64_decode(code, x, y, z);
         }
     };

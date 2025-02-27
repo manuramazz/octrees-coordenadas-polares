@@ -6,7 +6,7 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include "type_names.hpp"
 #include "TimeWatcher.hpp"
-
+#include "neigh_search_result.hpp"
 struct SearchSet {
     const size_t numSearches;
     std::vector<Point> searchPoints;
@@ -45,6 +45,7 @@ template <PointType Point_t>
 struct ResultSet {
     const std::shared_ptr<const SearchSet> searchSet;
     std::vector<std::vector<Point_t*>> resultsNeigh;
+    std::vector<NeighSearchResult<Point_t>> resultsNeighStruct;
     std::vector<std::vector<Point_t>> resultsNeighCopy;
     std::vector<std::vector<Point_t*>> resultsNeighOld;
     std::vector<size_t> resultsNumNeigh;
@@ -81,6 +82,56 @@ struct ResultSet {
                 }
             }
         }
+        return wrongSearches;
+    }
+
+    std::vector<size_t> checkNeighVsStructResults(
+        const std::vector<std::vector<Point_t*>>& results1, 
+        const std::vector<NeighSearchResult<Point_t>>& results2)
+    {
+        std::vector<size_t> wrongSearches;
+        
+        for (size_t i = 0; i < results1.size() && i < results2.size(); i++) {
+            // Get the original vector of pointers
+            auto v1 = results1[i];
+            
+            // Extract IDs from the first vector
+            std::vector<int> ids1;
+            ids1.reserve(v1.size());
+            for (const auto* ptr : v1) {
+                ids1.push_back(ptr->id());
+            }
+            
+            // Extract IDs from the NeighSearchResult using its iterator
+            std::vector<int> ids2;
+            for (const auto& point : results2[i]) {
+                ids2.push_back(point.id());
+            }
+            
+            // Check sizes first
+            if (ids1.size() != ids2.size()) {
+                wrongSearches.push_back(i);
+                continue;
+            }
+            
+            // Sort both ID vectors for comparison
+            std::sort(ids1.begin(), ids1.end());
+            std::sort(ids2.begin(), ids2.end());
+            
+            // Compare the sorted ID lists
+            if (!std::equal(ids1.begin(), ids1.end(), ids2.begin())) {
+                wrongSearches.push_back(i);
+            }
+        }
+        
+        // If vector sizes differ, mark all extra indices as wrong
+        if (results1.size() != results2.size()) {
+            for (size_t i = std::min(results1.size(), results2.size()); 
+                 i < std::max(results1.size(), results2.size()); i++) {
+                wrongSearches.push_back(i);
+            }
+        }
+        
         return wrongSearches;
     }
 
@@ -137,6 +188,29 @@ struct ResultSet {
             for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
                 size_t idx = wrongSearches[i];
                 size_t nPoints1 = results1[idx].size(), nPoints2 = results2[idx].size();
+                std::cout << "\tAt set " << idx << " with "
+                        << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
+            }
+
+            if (wrongSearches.size() > printingLimit) {
+                std::cout << "\tAnd at " << (wrongSearches.size() - printingLimit) << " other search instances..." << std::endl;
+            }
+        } else {
+            std::cout << "All results are right!" << std::endl;
+        }
+    }
+
+    void checkOperationNeighVsStruct(
+        std::vector<std::vector<Point_t*>>& results, 
+        std::vector<NeighSearchResult<Point_t>>& resultsStruct,
+        size_t printingLimit = 10) 
+    {
+        std::vector<size_t> wrongSearches = checkNeighVsStructResults(results, resultsStruct);
+        if (wrongSearches.size() > 0) {
+            std::cout << "Wrong results at " << wrongSearches.size() << " search sets" << std::endl;
+            for (size_t i = 0; i < std::min(wrongSearches.size(), printingLimit); i++) {
+                size_t idx = wrongSearches[i];
+                size_t nPoints1 = results[idx].size(), nPoints2 = resultsStruct[idx].size();
                 std::cout << "\tAt set " << idx << " with "
                         << nPoints1 << " VS " << nPoints2 << " points found" << std::endl;
             }
@@ -259,6 +333,16 @@ struct ResultSet {
         }
     }
     
+    void checkResultStructSearches() {
+        if (resultsNeigh.empty() || resultsNeighStruct.empty()) {
+            std::cout << "Ptr vs struct searches results were not computed! Not checking.\n";
+            return;
+        }
+        std::cout << "Checking search results for neighbor searches..." << std::endl;
+        checkOperationNeighVsStruct(resultsNeigh, resultsNeighStruct);
+    }
+
+
     void checkResultsApproxSearches(size_t printingLimit = 10) {
         if (resultsSearchApproxLower.empty() || resultsSearchApproxUpper.empty() || resultsNeigh.empty()) {
             std::cout << "Approximate searches results were not computed! Not checking approximation results.\n";
@@ -304,6 +388,7 @@ struct ResultSet {
         std::cout << "On average over all searches done, upper bound searches found " 
                   << (totalDiffUpper / nnzSearches) << "% more points\n";
     }    
+
 };
 
 
@@ -356,6 +441,23 @@ class OctreeBenchmark {
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet->resultsNeighCopy[i] = result;
+                }
+            
+            averageResultSize = averageResultSize / searchSet->numSearches;
+            return averageResultSize;
+        }
+
+        template<Kernel_t kernel>
+        size_t searchNeighStruct(float radii) {
+            if(checkResults && resultSet->resultsNeighStruct.empty())
+                resultSet->resultsNeighStruct.resize(searchSet->numSearches);
+            size_t averageResultSize = 0;
+            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet->numSearches; i++) {
+                    auto result = oct->template searchNeighborsStruct<kernel>(searchSet->searchPoints[i], radii);
+                    averageResultSize += result.size();
+                    if(checkResults)
+                        resultSet->resultsNeighStruct[i] = result;
                 }
             
             averageResultSize = averageResultSize / searchSet->numSearches;
@@ -532,6 +634,13 @@ class OctreeBenchmark {
         }
 
         template<Kernel_t kernel>
+        void benchmarkSearchNeighStruct(size_t repeats, float radius) {
+            const auto kernelStr = kernelToString(kernel);
+            auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighStruct<kernel>(radius); }, useWarmup);
+            appendToCsv("neighSearchStruct", kernelStr, radius, stats, averageResultSize);
+        }
+
+        template<Kernel_t kernel>
         void benchmarkSearchNeighApprox(size_t repeats, float radius, double tolerancePercentage, bool upperBound) {
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighApprox<kernel>(radius, tolerancePercentage, upperBound); }, useWarmup);
@@ -666,6 +775,18 @@ class OctreeBenchmark {
             std::cout << std::endl;
         }
 
+        void searchPtrVsStructBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+            printBenchmarkLog("neighbors vs neighborsStruct comparison", benchmarkRadii, repeats, numSearches);
+            size_t total = benchmarkRadii.size() * 2;
+            size_t current = 1;
+            for(size_t i = 0; i<benchmarkRadii.size(); i++) {
+                benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                printBenchmarkUpdate("Neighbor search - pointer", total, current, benchmarkRadii[i]);
+                benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
+                printBenchmarkUpdate("Neighbor search - struct", total, current, benchmarkRadii[i]);
+            }
+            std::cout << std::endl;
+        }
 
         void searchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
             printBenchmarkLog("neighSearch and numNeighSearch", benchmarkRadii, repeats, numSearches);
