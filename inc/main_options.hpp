@@ -22,8 +22,11 @@ public:
 	std::vector<float> benchmarkRadii{2.5, 5.0, 7.5, 10.0};
 	size_t repeats{2};
 	size_t numSearches{10000};
+	bool sequentialSearches{false};
+	bool searchAll{false};
 	bool checkResults{false};
 	bool useWarmup{true};
+	bool useParallel{true};
 	BenchmarkMode benchmarkMode{SEARCH};
 	std::vector<double> approximateTolerances{50.0};
 };
@@ -39,6 +42,7 @@ enum LongOptions : int
 	CHECK,
 	BENCHMARK,
 	NO_WARMUP,
+	NO_PARALLEL,
 	APPROXIMATE_TOLERANCES
 };
 
@@ -54,6 +58,7 @@ const option long_opts[] = {
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "benchmark", required_argument, nullptr, LongOptions::BENCHMARK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
+	{ "no-parallel", no_argument, nullptr, LongOptions::NO_PARALLEL },
 	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
 	{ nullptr, 0, nullptr, 0 }
 };

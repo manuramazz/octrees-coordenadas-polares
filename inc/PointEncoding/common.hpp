@@ -8,6 +8,7 @@
 #include "Geometry/Box.hpp"
 #include <vector>
 #include <tuple>
+#include <optional>
 
 /**
  * @namespace PointEncoding
@@ -60,6 +61,15 @@ namespace PointEncoding {
 		return Encoder::encode(x, y, z);
     }
 
+    template <typename Encoder, typename Point_t>
+    std::vector<typename Encoder::key_t> encodePoints(const std::vector<Point_t> &points, const Box &bbox) {
+        std::vector<typename Encoder::key_t> codes(points.size());
+        #pragma omp parallel for schedule(static)
+            for(size_t i = 0; i < points.size(); i++) {
+                codes[i] = encodeFromPoint<Encoder>(points[i], bbox);
+            }
+        return codes;
+    }
 
     /**
      * @brief This function computes the encodings of the points and sorts them in
@@ -73,14 +83,14 @@ namespace PointEncoding {
      * @param bbox The precomputed global bounding box of points
      */
     template <typename Encoder, typename Point_t>
-    void sortPoints(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, const Box &bbox) {
+    std::vector<typename Encoder::key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox) {
         // Temporal vector of pairs
         // TODO: find a better way, since this consumes a lot of extra memory 
         std::vector<std::pair<typename Encoder::key_t, Point_t>> encoded_points(points.size());
 
         // Compute encodings in parallel
         // TODO: look into better omp schedules for this
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
                 encoded_points[i] = std::make_pair(encodeFromPoint<Encoder>(points[i], bbox), points[i]);
             }
@@ -93,23 +103,40 @@ namespace PointEncoding {
         
         // Copy back sorted codes and points in parallel
         // TODO: look into better omp schedules for this
-        codes.resize(points.size());
+        std::vector<typename Encoder::key_t> codes(points.size());
         #pragma omp parallel for
             for(size_t i = 0; i < points.size(); i++) {
                 codes[i] = encoded_points[i].first;
                 points[i] = encoded_points[i].second;
             }
+        return codes;
+    }
+
+    template <typename Encoder, typename Point_t>
+    std::vector<typename Encoder::key_t> sortPoints(std::vector<Point_t> &points) {
+        // Find the bbox
+        Vector radii;
+        Point center = mbb(points, radii);
+        Box bbox = Box(center, radii);
+
+        // Call the regular sortPoints
+        return sortPoints<Encoder, Point_t>(points, bbox);
     }
 
     /**
      * @brief A similar function to @see sortPoints(), but here the LiDAR metadata of the points is passed separately, and a tuple of 3 elements is sorted instead
      * of a pair. 
-     * 
      */
     template <typename Encoder, typename Point_t>
-    void sortPointsMetadata(std::vector<Point_t> &points, std::vector<typename Encoder::key_t> &codes, std::vector<PointMetadata> &metadata, const Box &bbox) {
+    std::vector<typename Encoder::key_t> sortPoints(std::vector<Point_t> &points, 
+        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox) {
+        if(!meta_opt.has_value()) {
+            // regular sort without metadata
+            return sortPoints<Encoder, Point_t>(points, bbox);
+        }
         // Temporal vector of 3-tuples
         // TODO: find a better way, since this consumes a lot of extra memory 
+        std::vector<PointMetadata>& metadata = meta_opt.value();
         std::vector<std::tuple<typename Encoder::key_t, Point_t, PointMetadata>> encoded_points(points.size());
 
         // Compute encodings in parallel
@@ -127,13 +154,27 @@ namespace PointEncoding {
         
         // Copy back sorted codes, points, and metadata in parallel
         // TODO: look into better omp schedules for this
-        codes.resize(points.size());
+        std::vector<typename Encoder::key_t> codes(points.size());
         #pragma omp parallel for
             for(size_t i = 0; i < points.size(); i++) {
                 std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
             }
+        return codes;
     }
-    
+
+    template <typename Encoder, typename Point_t>
+    std::vector<typename Encoder::key_t> sortPoints(std::vector<Point_t> &points, 
+        std::optional<std::vector<PointMetadata>> &meta_opt) {
+        // Find the bbox
+        Vector radii;
+        Point center = mbb(points, radii);
+        Box bbox = Box(center, radii);
+
+        // Call the regular sortPoints with metadata
+        return sortPoints<Encoder, Point_t>(points, meta_opt, bbox);
+    }
+
+
     /**
      * @brief Get the center and radii of an octant at a given octree level.
      * 

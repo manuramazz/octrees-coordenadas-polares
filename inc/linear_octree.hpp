@@ -495,7 +495,7 @@ public:
      * spatial data locality
      */
     explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, 
-        bool printLog = true): points(points), metadata(metadata) {
+        bool pointsSorted = false, bool printLog = true): points(points), metadata(metadata) {
         double total_time = 0.0;
         TimeWatcher tw;
         auto buildStep = [&](auto &&step, const std::string action) {
@@ -515,7 +515,11 @@ public:
             std::cout << "Linear octree build steps summary:\n";
         }
         buildStep([&] { setupBbox(); }, "Finding bounding box:");
-        buildStep([&] { sortPoints(); }, "Point encoding and sorting:");
+        if(pointsSorted) {
+            buildStep([&] { encodePoints(); }, "Point encoding:");
+        } else {
+            buildStep([&] { sortPoints(); }, "Point encoding and sorting:");
+        }
         buildStep([&] { buildOctreeLeaves(); }, "Leaf construction:");
         buildStep([&] { resize(); }, "Memory allocation:");
         buildStep([&] { buildOctreeInternal(); }, "Internal part and linking:");
@@ -573,11 +577,15 @@ public:
      * @details The points array is changed after this step
      */
     void sortPoints() {
-        if (metadata.has_value()) {
-            PointEncoding::sortPointsMetadata<Encoder_t, Point_t>(points, codes, metadata.value(), bbox);    
-        } else {
-            PointEncoding::sortPoints<Encoder_t, Point_t>(points, codes, bbox);    
-        }
+        codes = PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata, bbox);
+    }
+
+    /**
+     * @brief This function computes the encodins but does not sort (it is called on the ctor when the 
+     * points are already sorted beforehand to not sort them again)
+     */
+    void encodePoints() {
+        codes = PointEncoding::encodePoints<Encoder_t, Point_t>(points, bbox);
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()

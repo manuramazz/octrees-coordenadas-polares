@@ -9,7 +9,7 @@ namespace ResultChecking {
     
     template <PointType Point_t>
     struct ResultSet {
-        const std::shared_ptr<const SearchSet> searchSet;
+        const SearchSet<Point_t>& searchSet;
         std::vector<std::vector<Point_t*>> resultsNeigh;
         std::vector<NeighborSet<Point_t>> resultsNeighStruct;
         std::vector<std::vector<Point_t*>> resultsNeighOld;
@@ -21,7 +21,7 @@ namespace ResultChecking {
         std::vector<NeighborSet<Point_t>> resultsSearchApproxLower;
         double tolerancePercentageUsed;
         
-        ResultSet(const std::shared_ptr<const SearchSet> searchSet): searchSet(searchSet) {  }
+        ResultSet(const SearchSet<Point_t>& searchSet): searchSet(searchSet) {  }
 
         // Copy constructor
         ResultSet(const ResultSet& other)
@@ -330,9 +330,9 @@ namespace ResultChecking {
             return;
         }
     
-        size_t printingOn = std::min(resultSet.searchSet->numSearches, printingLimit);
+        size_t printingOn = std::min(resultSet.searchSet.numSearches, printingLimit);
         std::cout << "Approximate searches results (printing " << printingOn 
-                  << " searches of a total of " << resultSet.searchSet->numSearches << " searches performed):\n";
+                  << " searches of a total of " << resultSet.searchSet.numSearches << " searches performed):\n";
         std::cout << "Tolerance percentage used: " << resultSet.tolerancePercentageUsed << "%\n";
     
         // Column headers
@@ -344,9 +344,9 @@ namespace ResultChecking {
                   << "\n";
     
         double totalDiffLower = 0.0, totalDiffUpper = 0.0;
-        size_t nnzSearches = resultSet.searchSet->numSearches;
+        size_t nnzSearches = resultSet.searchSet.numSearches;
     
-        for (size_t i = 0; i < resultSet.searchSet->numSearches; i++) {
+        for (size_t i = 0; i < resultSet.searchSet.numSearches; i++) {
             // Avoid division by zero
             if (resultSet.resultsNeighStruct[i].empty()) {
                 nnzSearches--;

@@ -37,9 +37,9 @@ class Octree
 	public:
 	using PointType = Point_t;
 	Octree();
-
-	explicit Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt);
-	explicit Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt);
+	// ignore pointsSorted
+	explicit Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
+	explicit Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
 
 	Octree(const Point& center, float radius);
 	Octree(Point center, float radius, std::vector<Point_t*>& points);

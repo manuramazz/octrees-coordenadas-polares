@@ -23,6 +23,7 @@ void printHelp()
 		   "'struct' for comparing performance on raw vector returned vs structure with octants and extra points\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
 		   "--no-warmup: Disable warmup phase\n"
+		   "--no-parallel: Disable OpenMP parallelization\n"
 		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n";
 	exit(1);
 }
@@ -61,36 +62,34 @@ void processArgs(int argc, char** argv)
 			case LongOptions::HELP:
 				printHelp();
 				break;
-
 			case 'i':
 				mainOptions.inputFile = fs::path(std::string(optarg));
 				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
-
 			case 'o':
 				mainOptions.outputDirName = fs::path(std::string(optarg));
 				break;
-
 			case 'r':
 			case LongOptions::RADII:
 				mainOptions.benchmarkRadii = readVectorArg<float>(std::string(optarg));
 				break;
-
 			case 't':
 			case LongOptions::REPEATS:
 				mainOptions.repeats = std::stoul(std::string(optarg));
 				break;
-
 			case 's':
 			case LongOptions::SEARCHES:
-				mainOptions.numSearches = std::stoul(std::string(optarg));
+				if (std::string(optarg) == "all") {
+					mainOptions.searchAll = true;
+					mainOptions.numSearches = 0;
+				} else {
+					mainOptions.numSearches = std::stoul(std::string(optarg));
+				}
 				break;
-
 			case 'c':
 			case LongOptions::CHECK:
 				mainOptions.checkResults = true;
 				break;
-
 			case 'b':
 			case LongOptions::BENCHMARK:
 				if (std::string(optarg) == "srch") {
@@ -99,6 +98,7 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = COMPARE;
 				} else if (std::string(optarg) == "seq") {
 					mainOptions.benchmarkMode = SEQUENTIAL;
+					mainOptions.sequentialSearches = true;
 				} else if(std::string(optarg) == "pt") {
 					mainOptions.benchmarkMode = POINT_TYPE;
 				} else if(std::string(optarg) == "log") {
@@ -110,13 +110,14 @@ void processArgs(int argc, char** argv)
 					printHelp();
 				}
 				break;
-			
 			case LongOptions::NO_WARMUP:
 				mainOptions.useWarmup = false;
 				break;
+			case LongOptions::NO_PARALLEL:
+				mainOptions.useParallel = false;
+				break;
 			case LongOptions::APPROXIMATE_TOLERANCES:
 				mainOptions.approximateTolerances = readVectorArg<double>(std::string(optarg));
-
 				break;
 			case '?': // Unrecognized option
 			default:

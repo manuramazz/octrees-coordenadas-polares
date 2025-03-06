@@ -22,7 +22,7 @@ class OctreeBenchmark {
         std::ofstream &outputFile;
         
         const bool checkResults, useWarmup, useParallel;
-        const std::shared_ptr<const SearchSet> searchSet;
+        const SearchSet<Point_t> &searchSet;
         ResultSet<Point_t> resultSet;
 
         #pragma GCC push_options
@@ -36,29 +36,29 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNeigh(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template searchNeighbors<kernel>(searchSet->searchPoints[i], radii);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template searchNeighbors<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet.resultsNeigh[i] = std::move(result);
                 }
             
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
         template<Kernel_t kernel>
         size_t searchNeighStruct(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template searchNeighborsStruct<kernel>(searchSet->searchPoints[i], radii);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template searchNeighborsStruct<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet.resultsNeighStruct[i] = std::move(result);
                 }
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
@@ -66,9 +66,9 @@ class OctreeBenchmark {
         size_t searchNeighApprox(float radii, double tolerancePercentage, bool upperBound) {
             resultSet.tolerancePercentageUsed = tolerancePercentage;
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template searchNeighborsApprox<kernel>(searchSet->searchPoints[i], radii, tolerancePercentage, upperBound);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template searchNeighborsApprox<kernel>(points[searchSet.searchPoints[i]], radii, tolerancePercentage, upperBound);
                     averageResultSize += result.size();
                     if(checkResults) {
                         if(upperBound)
@@ -78,49 +78,49 @@ class OctreeBenchmark {
                     }
                 }
             
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
         template<Kernel_t kernel>
         size_t searchNeighOld(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template searchNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template searchNeighborsOld<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
                     if(checkResults)
                         resultSet.resultsNeighOld[i] = std::move(result);
                 }
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
         template<Kernel_t kernel>
         size_t searchNumNeigh(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template numNeighbors<kernel>(searchSet->searchPoints[i], radii);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template numNeighbors<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result;
                     if(checkResults)
                         resultSet.resultsNumNeigh[i] = result;
                 }
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
         template<Kernel_t kernel>
         size_t searchNumNeighOld(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(static) reduction(+:averageResultSize)
-                for(size_t i = 0; i<searchSet->numSearches; i++) {
-                    auto result = oct->template numNeighborsOld<kernel>(searchSet->searchPoints[i], radii);
+            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+                for(size_t i = 0; i<searchSet.numSearches; i++) {
+                    auto result = oct->template numNeighborsOld<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result;
                     if(checkResults)
                         resultSet.resultsNumNeighOld[i] = result;
                 }
-            averageResultSize = averageResultSize / searchSet->numSearches;
+            averageResultSize = averageResultSize / searchSet.numSearches;
             return averageResultSize;
         }
 
@@ -151,7 +151,7 @@ class OctreeBenchmark {
                 << fullOp << ',' 
                 << kernel << ',' 
                 << radius << ','
-                << searchSet->numSearches << ',' 
+                << searchSet.numSearches << ',' 
                 << stats.size() << ','
                 << stats.accumulated() << ',' 
                 << stats.mean() << ',' 
@@ -165,12 +165,13 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt,
-            size_t numSearches = 100, std::shared_ptr<const SearchSet> searchSet = nullptr, std::ofstream &file = std::ofstream(),
-            std::string comment = "", bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup, bool useParallel = true) :
+        OctreeBenchmark(std::vector<Point_t>& points, const SearchSet<Point_t>& searchSet, 
+            std::ofstream &file, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt,
+            bool pointsSorted = false, std::string comment = "", bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup, 
+            bool useParallel = mainOptions.useParallel) :
             points(points), 
-            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points, metadata)),
-            searchSet(searchSet ? searchSet : std::make_shared<const SearchSet>(numSearches, points)),
+            searchSet(searchSet),
+            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points, metadata, pointsSorted)),
             outputFile(file),
             comment(comment),
             checkResults(checkResults),
@@ -224,7 +225,7 @@ class OctreeBenchmark {
             appendToCsv("numNeighOldSearch", kernelStr, radius, stats, averageResultSize);
         }
 
-        void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+        void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats) {
             // Displaying the basic information with formatting
             std::cout << std::fixed << std::setprecision(3);
             std::string octreeName;
@@ -251,11 +252,11 @@ class OctreeBenchmark {
             std::cout << "}" << std::endl;
 
             // Showing other parameters
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of searches:"       << std::setw(LOG_FIELD_WIDTH) << numSearches                      << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Number of searches:"       << std::setw(LOG_FIELD_WIDTH) << searchSet.numSearches             << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Repeats:"                  << std::setw(LOG_FIELD_WIDTH) << repeats                           << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Warmup:"                   << std::setw(LOG_FIELD_WIDTH) << (useWarmup ? "enabled" : "disabled") << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Parallel execution:"       << std::setw(LOG_FIELD_WIDTH) << (useParallel ? "enabled" : "disabled") << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Search set distribution:"  << std::setw(LOG_FIELD_WIDTH) << (searchSet->isSequential ? "sequential" : "random") << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Search set distribution:"  << std::setw(LOG_FIELD_WIDTH) << (searchSet.sequential ? "sequential" : "random") << "\n";
             
             std::cout << std::endl;
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH/2) << "Progress"    << std::setw(LOG_FIELD_WIDTH/2) << "Completed at" 
@@ -269,15 +270,15 @@ class OctreeBenchmark {
             currentExecution++;
         }
 
-        void searchImplComparisonBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+        void searchImplComparisonBench(const std::vector<float> &benchmarkRadii = mainOptions.benchmarkRadii, const size_t repeats = mainOptions.repeats) {
             if(checkResults){
-                resultSet.resultsNeighOld.resize(searchSet->numSearches);
-                resultSet.resultsNeigh.resize(searchSet->numSearches);
-                resultSet.resultsNeighStruct.resize(searchSet->numSearches);
-                resultSet.resultsNumNeigh.resize(searchSet->numSearches);
-                resultSet.resultsNumNeighOld.resize(searchSet->numSearches);
+                resultSet.resultsNeighOld.resize(searchSet.numSearches);
+                resultSet.resultsNeigh.resize(searchSet.numSearches);
+                resultSet.resultsNeighStruct.resize(searchSet.numSearches);
+                resultSet.resultsNumNeigh.resize(searchSet.numSearches);
+                resultSet.resultsNumNeighOld.resize(searchSet.numSearches);
             }
-            printBenchmarkLog("neighSearch and numNeighSearch implementation comparison", benchmarkRadii, repeats, numSearches);
+            printBenchmarkLog("neighSearch and numNeighSearch implementation comparison", benchmarkRadii, repeats);
             size_t total = benchmarkRadii.size() * 5;
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
@@ -314,16 +315,16 @@ class OctreeBenchmark {
             std::cout << std::endl;
         }
         
-        void searchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches) {
+        void searchBench(const std::vector<float> &benchmarkRadii = mainOptions.benchmarkRadii, const size_t repeats = mainOptions.repeats) {
             if(checkResults) {
                 if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
-                    resultSet.resultsNeighStruct.resize(searchSet->numSearches);
+                    resultSet.resultsNeighStruct.resize(searchSet.numSearches);
                 } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
-                    resultSet.resultsNeigh.resize(searchSet->numSearches);
+                    resultSet.resultsNeigh.resize(searchSet.numSearches);
                 }
-                resultSet.resultsNumNeigh.resize(searchSet->numSearches);
+                resultSet.resultsNumNeigh.resize(searchSet.numSearches);
             }
-            printBenchmarkLog("neighSearch and numNeighSearch", benchmarkRadii, repeats, numSearches);
+            printBenchmarkLog("neighSearch and numNeighSearch", benchmarkRadii, repeats);
             size_t total = benchmarkRadii.size() * 2;
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
@@ -349,14 +350,15 @@ class OctreeBenchmark {
             std::cout << std::endl;
         }
 
-        void approxSearchBench(const std::vector<float> &benchmarkRadii, const size_t repeats, const size_t numSearches, const std::vector<double> tolerancePercentages) {
+        void approxSearchBench(const std::vector<float> &benchmarkRadii = mainOptions.benchmarkRadii, const size_t repeats = mainOptions.repeats, 
+            const std::vector<double> tolerances = mainOptions.approximateTolerances) {
             if(checkResults) {
-                resultSet.resultsNeighStruct.resize(searchSet->numSearches);
-                resultSet.resultsSearchApproxLower.resize(searchSet->numSearches);
-                resultSet.resultsSearchApproxUpper.resize(searchSet->numSearches);
+                resultSet.resultsNeighStruct.resize(searchSet.numSearches);
+                resultSet.resultsSearchApproxLower.resize(searchSet.numSearches);
+                resultSet.resultsSearchApproxUpper.resize(searchSet.numSearches);
             }
-            printBenchmarkLog("Approximate searches with low and high bounds", benchmarkRadii, repeats, numSearches);
-            size_t total = benchmarkRadii.size() * (tolerancePercentages.size() + 1);
+            printBenchmarkLog("Approximate searches with low and high bounds", benchmarkRadii, repeats);
+            size_t total = benchmarkRadii.size() * (tolerances.size() + 1);
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
                 benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[i]);
@@ -364,13 +366,13 @@ class OctreeBenchmark {
                 benchmarkSearchNeighStruct<Kernel_t::cube>(repeats, benchmarkRadii[i]);
                 benchmarkSearchNeighStruct<Kernel_t::square>(repeats, benchmarkRadii[i]);
                 printBenchmarkUpdate("Neighbor search - struct impl.", total, current, benchmarkRadii[i]);
-                for(size_t j = 0; j<tolerancePercentages.size(); j++) {
-                    benchmarkSearchNeighApprox<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerancePercentages[j]);
-                    benchmarkSearchNeighApprox<Kernel_t::circle>(repeats, benchmarkRadii[i], tolerancePercentages[j]);
-                    benchmarkSearchNeighApprox<Kernel_t::cube>(repeats, benchmarkRadii[i], tolerancePercentages[j]);
-                    benchmarkSearchNeighApprox<Kernel_t::square>(repeats, benchmarkRadii[i], tolerancePercentages[j]);
+                for(size_t j = 0; j<tolerances.size(); j++) {
+                    benchmarkSearchNeighApprox<Kernel_t::sphere>(repeats, benchmarkRadii[i], tolerances[j]);
+                    benchmarkSearchNeighApprox<Kernel_t::circle>(repeats, benchmarkRadii[i], tolerances[j]);
+                    benchmarkSearchNeighApprox<Kernel_t::cube>(repeats, benchmarkRadii[i], tolerances[j]);
+                    benchmarkSearchNeighApprox<Kernel_t::square>(repeats, benchmarkRadii[i], tolerances[j]);
                     printBenchmarkUpdate(std::string("Neighbor search - Approximated with tol. = ") 
-                            + std::to_string(tolerancePercentages[j]) + std::string("%"),
+                            + std::to_string(tolerances[j]) + std::string("%"),
                             total, current, benchmarkRadii[i]);
                 }
                 
@@ -381,6 +383,6 @@ class OctreeBenchmark {
             oct.reset();
         }
 
-        std::shared_ptr<const SearchSet> getSearchSet() const { return searchSet; }
+        const SearchSet<Point_t>& getSearchSet() const { return searchSet; }
         ResultSet<Point_t> getResultSet() const { return resultSet; }
 };
