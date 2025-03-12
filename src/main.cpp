@@ -20,6 +20,7 @@
 #include "PointEncoding/morton_encoder.hpp"
 #include "PointEncoding/hilbert_encoder.hpp"
 #include "result_checking.hpp"
+#include "omp.h"
 
 namespace fs = std::filesystem;
 
@@ -132,6 +133,26 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
   obSeq.deleteOctree();
 }
 
+/**
+ * @brief Runs the parallel execution benchmark.
+ * 
+ * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
+ */
+template <PointType Point_t, typename Encoder_t>
+void parallelScalabilityBenchmark(std::ofstream &outputFile) {
+  auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
+  std::vector<Point_t> points = std::move(pointMetaPair.first);
+  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+  // Sort the point cloud
+  PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata);
+  
+  // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
+  const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
+
+  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> ob(points, searchSet, outputFile, metadata, true);
+  ob.parallelScalabilityBenchmark();
+}
+
 template <PointType Point_t>
 std::vector<Point_t> generateGridCloud(size_t n) {
   std::vector<Point_t> points;
@@ -189,7 +210,8 @@ void linearOctreeLog(std::ofstream &outputFile, bool useGridCloud = false, size_
 }
 
 int main(int argc, char *argv[]) {
-  setDefaults();
+  // Set default OpenMP schedule: dynamic and auto chunk size
+  omp_set_schedule(omp_sched_dynamic, 0);
   processArgs(argc, argv);
   std::cout << std::fixed << std::setprecision(3); 
   fs::path inputFile = mainOptions.inputFile;
@@ -229,6 +251,9 @@ int main(int argc, char *argv[]) {
     break;
     case BenchmarkMode::SEQUENTIAL:
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+    break;
+    case BenchmarkMode::PARALLEL:
+      parallelScalabilityBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
       linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);

@@ -21,17 +21,13 @@ void printHelp()
 		   "'pt' for point type comparison,\n\t" 
 		   "'approx' for approximate searches comparison\n\t"
 		   "'struct' for comparing performance on raw vector returned vs structure with octants and extra points\n\t"
+		   "'parallel' for a parallelism scalability benchmark across a number of threads spawned (passed with --num-threads) and with multiple OpenMP schedules\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
 		   "--no-warmup: Disable warmup phase\n"
 		   "--no-parallel: Disable OpenMP parallelization\n"
-		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n";
+		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n",
+		   "--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)";
 	exit(1);
-}
-
-void setDefaults()
-{
-	if (mainOptions.outputDirName.empty()) { mainOptions.outputDirName = "out"; }
-	mainOptions.benchmarkMode = BenchmarkMode::SEARCH;
 }
 
 template <typename T>
@@ -105,6 +101,8 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = LOG_OCTREE;
 				} else if(std::string(optarg) == "approx") {
 					mainOptions.benchmarkMode = APPROX;
+				} else if(std::string(optarg) == "parallel") {
+					mainOptions.benchmarkMode = PARALLEL;
 				} else {
 					std::cerr << "Invalid benchmark mode: " << optarg << "\n";
 					printHelp();
@@ -118,6 +116,9 @@ void processArgs(int argc, char** argv)
 				break;
 			case LongOptions::APPROXIMATE_TOLERANCES:
 				mainOptions.approximateTolerances = readVectorArg<double>(std::string(optarg));
+				break;
+			case LongOptions::NUM_THREADS:
+				mainOptions.numThreads = readVectorArg<size_t>(std::string(optarg));
 				break;
 			case '?': // Unrecognized option
 			default:

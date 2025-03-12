@@ -5,17 +5,18 @@
 #include <getopt.h>
 #include <iostream>
 #include <vector>
+#include "omp.h"
 
 namespace fs = std::filesystem;
 
-enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, APPROX, LOG_OCTREE };
+enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, APPROX, PARALLEL, LOG_OCTREE };
 
 class main_options
 {
 public:
 	// Files & paths
 	fs::path inputFile{};
-	fs::path outputDirName{};
+	fs::path outputDirName{"out"};
 	std::string inputFileName{};
 
 	// Benchmark parameters
@@ -29,6 +30,7 @@ public:
 	bool useParallel{true};
 	BenchmarkMode benchmarkMode{SEARCH};
 	std::vector<double> approximateTolerances{50.0};
+	std::vector<size_t> numThreads{omp_get_max_threads()};
 };
 
 extern main_options mainOptions;
@@ -43,7 +45,8 @@ enum LongOptions : int
 	BENCHMARK,
 	NO_WARMUP,
 	NO_PARALLEL,
-	APPROXIMATE_TOLERANCES
+	APPROXIMATE_TOLERANCES,
+	NUM_THREADS
 };
 
 // Define short options
@@ -60,6 +63,7 @@ const option long_opts[] = {
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
 	{ "no-parallel", no_argument, nullptr, LongOptions::NO_PARALLEL },
 	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
+	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS},
 	{ nullptr, 0, nullptr, 0 }
 };
 

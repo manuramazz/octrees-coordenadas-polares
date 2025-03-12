@@ -36,7 +36,7 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNeigh(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template searchNeighbors<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
@@ -51,7 +51,7 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNeighStruct(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template searchNeighborsStruct<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
@@ -66,7 +66,7 @@ class OctreeBenchmark {
         size_t searchNeighApprox(float radii, double tolerancePercentage, bool upperBound) {
             resultSet.tolerancePercentageUsed = tolerancePercentage;
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template searchNeighborsApprox<kernel>(points[searchSet.searchPoints[i]], radii, tolerancePercentage, upperBound);
                     averageResultSize += result.size();
@@ -85,7 +85,7 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNeighOld(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template searchNeighborsOld<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result.size();
@@ -99,7 +99,7 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNumNeigh(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template numNeighbors<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result;
@@ -113,7 +113,7 @@ class OctreeBenchmark {
         template<Kernel_t kernel>
         size_t searchNumNeighOld(float radii) {
             size_t averageResultSize = 0;
-            #pragma omp parallel for if (useParallel) schedule(dynamic) reduction(+:averageResultSize)
+            #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
                 for(size_t i = 0; i<searchSet.numSearches; i++) {
                     auto result = oct->template numNeighborsOld<kernel>(points[searchSet.searchPoints[i]], radii);
                     averageResultSize += result;
@@ -125,11 +125,13 @@ class OctreeBenchmark {
         }
 
 
-        inline void appendToCsv(const std::string& operation, 
-                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, size_t averageResultSize = 0, double tolerancePercentage = 0.0) {
+        inline void appendToCsv(const std::string& operation, const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, 
+                                size_t averageResultSize = 0, size_t numThreads = omp_get_max_threads(), double tolerancePercentage = 0.0) {
             // Check if the file is empty and append header if it is
             if (outputFile.tellp() == 0) {
-                outputFile << "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage\n";
+                outputFile <<   "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,"
+                                "accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage,"
+                                "openmp_threads,openmp_schedule,openmp_chunksize\n";
             }
             // append the comment to the octree name if needed
             std::string octreeName;
@@ -143,6 +145,19 @@ class OctreeBenchmark {
             std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
             // if the comment, exists, append it to the op. name
             std::string fullOp = operation + ((comment != "") ? "_" + comment : "");
+
+            // Get OpenMP runtime information
+            omp_sched_t openmpSchedule;
+            int openmpChunkSize;
+            omp_get_schedule(&openmpSchedule, &openmpChunkSize);
+            std::string openmpScheduleName;
+            switch (openmpSchedule) {
+                case omp_sched_static: openmpScheduleName = "static"; break;
+                case omp_sched_dynamic: openmpScheduleName = "dynamic"; break;
+                case omp_sched_guided: openmpScheduleName = "guided"; break;
+                default: openmpScheduleName = "unknown"; break;
+            }
+
             outputFile << getCurrentDate() << ',' 
                 << octreeName << ',' 
                 << pointTypeName << ','
@@ -160,7 +175,10 @@ class OctreeBenchmark {
                 << stats.usedWarmup() << ','
                 << stats.warmupValue() << ','
                 << averageResultSize << ','
-                << tolerancePercentage 
+                << tolerancePercentage << ','
+                << numThreads << ','
+                << openmpScheduleName << ','
+                << openmpChunkSize
                 << std::endl;
         }
 
@@ -181,48 +199,54 @@ class OctreeBenchmark {
     
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeigh(size_t repeats, float radius) {
+        void benchmarkSearchNeigh(size_t repeats, float radius, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeigh<kernel>(radius); }, useWarmup);
-            appendToCsv("neighSearch", kernelStr, radius, stats, averageResultSize);
+            appendToCsv("neighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeighStruct(size_t repeats, float radius) {
+        void benchmarkSearchNeighStruct(size_t repeats, float radius, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighStruct<kernel>(radius); }, useWarmup);
-            appendToCsv("neighSearchStruct", kernelStr, radius, stats, averageResultSize);
+            appendToCsv("neighSearchStruct", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeighApprox(size_t repeats, float radius, double tolerancePercentage) {
+        void benchmarkSearchNeighApprox(size_t repeats, float radius, double tolerancePercentage, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             // first lower bound, then upper bound
             auto [statsLower, averageResultSizeLower] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighApprox<kernel>(radius, tolerancePercentage, false); }, useWarmup);
-            appendToCsv("neighSearchApproxLower", kernelStr, radius, statsLower, averageResultSizeLower, tolerancePercentage);
+            appendToCsv("neighSearchApproxLower", kernelStr, radius, statsLower, averageResultSizeLower, numThreads, tolerancePercentage);
             auto [statsUpper, averageResultSizeUpper] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighApprox<kernel>(radius, tolerancePercentage, true); }, useWarmup);
-            appendToCsv("neighSearchApproxUpper", kernelStr, radius, statsUpper, averageResultSizeUpper, tolerancePercentage);
+            appendToCsv("neighSearchApproxUpper", kernelStr, radius, statsUpper, averageResultSizeUpper, numThreads, tolerancePercentage);
         }
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeighOld(size_t repeats, float radius) {
+        void benchmarkSearchNeighOld(size_t repeats, float radius, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNeighOld<kernel>(radius); }, useWarmup);
-            appendToCsv("neighOldSearch", kernelStr, radius, stats, averageResultSize);
+            appendToCsv("neighOldSearch", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
-        void benchmarkNumNeigh(size_t repeats, float radius) {
+        void benchmarkNumNeigh(size_t repeats, float radius, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNumNeigh<kernel>(radius); }, useWarmup);
-            appendToCsv("numNeighSearch", kernelStr, radius, stats, averageResultSize);
+            appendToCsv("numNeighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
-        void benchmarkNumNeighOld(size_t repeats, float radius) {
+        void benchmarkNumNeighOld(size_t repeats, float radius, size_t numThreads = omp_get_max_threads()) {
+            omp_set_num_threads(numThreads);
             const auto kernelStr = kernelToString(kernel);
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { return searchNumNeighOld<kernel>(radius); }, useWarmup);
-            appendToCsv("numNeighOldSearch", kernelStr, radius, stats, averageResultSize);
+            appendToCsv("numNeighOldSearch", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         void printBenchmarkLog(const std::string &bench_name, const std::vector<float> &benchmarkRadii, const size_t repeats) {
@@ -379,6 +403,35 @@ class OctreeBenchmark {
             }
         }
         
+
+        void parallelScalabilityBenchmark(const std::vector<float> &benchmarkRadii = mainOptions.benchmarkRadii, const size_t repeats = mainOptions.repeats, 
+            const std::vector<size_t> numThreads = mainOptions.numThreads) {
+            constexpr omp_sched_t schedules[] = {omp_sched_static, omp_sched_dynamic, omp_sched_guided};
+            printBenchmarkLog("Parallelism benchmark", benchmarkRadii, repeats);
+            size_t total = 3 * numThreads.size() * benchmarkRadii.size();
+            size_t current = 1;
+            for (omp_sched_t sched : schedules) {
+                omp_set_schedule(sched, 0); // We always use OpenMP default chunk size
+                std::string sched_name = (sched == omp_sched_static) ? "static" :
+                        (sched == omp_sched_dynamic) ? "dynamic" :
+                        (sched == omp_sched_guided) ? "guided" : "unknown";
+                for (size_t j = 0; j < numThreads.size(); j++) {                    
+                    for (size_t i = 0; i < benchmarkRadii.size(); i++) {
+                        if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+                            benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[i], numThreads[j]);
+                            benchmarkSearchNeighStruct<Kernel_t::cube>(repeats, benchmarkRadii[i], numThreads[j]);
+                        } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+                            benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i], numThreads[j]);
+                            benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i], numThreads[j]);
+                        }
+                        printBenchmarkUpdate("Neighbor search - " + sched_name + " schedule - " +
+                                                std::to_string(numThreads[j]) + " threads", 
+                                                total, current, benchmarkRadii[i]);
+                    }
+                }
+            }
+        }
+
         void deleteOctree() {
             oct.reset();
         }
