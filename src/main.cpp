@@ -138,7 +138,7 @@ void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
  * 
  * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
  */
-template <PointType Point_t, typename Encoder_t>
+template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
 void parallelScalabilityBenchmark(std::ofstream &outputFile) {
   auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
   std::vector<Point_t> points = std::move(pointMetaPair.first);
@@ -149,7 +149,7 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile) {
   // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
   const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> ob(points, searchSet, outputFile, metadata, true);
+  OctreeBenchmark<Octree_t, Point_t, Encoder_t> ob(points, searchSet, outputFile, metadata, true);
   ob.parallelScalabilityBenchmark();
 }
 
@@ -253,7 +253,8 @@ int main(int argc, char *argv[]) {
       sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::PARALLEL:
-      parallelScalabilityBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<LinearOctree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
       linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);

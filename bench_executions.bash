@@ -15,8 +15,10 @@ datasets_high_density=(
 
 radii_high_density="0.05,0.1,0.25,0.5"
 approx_tolerances="5.0,10.0,25.0,50.0,100.0" 
+number_of_threads="1,2,5,10,15,20,25,30,35,40"
 N_SEARCHES=5000
 
+: '
 # Pointer vs Linear benchmark
 for dataset in "${datasets[@]}"; do
     if [[ ! -f "$dataset" ]]; then
@@ -85,3 +87,21 @@ for dataset in "${datasets_high_density[@]}"; do
     fi
     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/approx_search" -r "$radii_high_density" -b "approx" -s "$N_SEARCHES" --approx-tol "$approx_tolerances"
 done
+'
+# Parallelization benchmark (we use different radii so it doesnt run forever)
+for dataset in "${datasets[@]}"; do
+    if [[ ! -f "$dataset" ]]; then
+        echo "Error: File not found - $dataset"
+        exit 1
+    fi
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/parallel" -r "1.0,2.0,3.0" -b "parallel" -s "$N_SEARCHES" --num-threads "$number_of_threads"
+done
+
+# This one may be too slow
+# for dataset in "${datasets_high_density[@]}"; do
+#     if [[ ! -f "$dataset" ]]; then
+#         echo "Error: File not found - $dataset"
+#         exit 1
+#     fi
+#     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/parallel" -r "$radii_high_density" -b "parallel" -s "$N_SEARCHES" --num-threads "$number_of_threads"
+# done

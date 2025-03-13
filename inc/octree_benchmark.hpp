@@ -131,7 +131,7 @@ class OctreeBenchmark {
             if (outputFile.tellp() == 0) {
                 outputFile <<   "date,octree,point_type,encoder,npoints,operation,kernel,radius,num_searches,repeats,"
                                 "accumulated,mean,median,stdev,used_warmup,warmup_time,avg_result_size,tolerance_percentage,"
-                                "openmp_threads,openmp_schedule,openmp_chunksize\n";
+                                "openmp_threads,openmp_schedule\n";
             }
             // append the comment to the octree name if needed
             std::string octreeName;
@@ -177,8 +177,7 @@ class OctreeBenchmark {
                 << averageResultSize << ','
                 << tolerancePercentage << ','
                 << numThreads << ','
-                << openmpScheduleName << ','
-                << openmpChunkSize
+                << openmpScheduleName
                 << std::endl;
         }
 
@@ -411,7 +410,7 @@ class OctreeBenchmark {
             size_t total = 3 * numThreads.size() * benchmarkRadii.size();
             size_t current = 1;
             for (omp_sched_t sched : schedules) {
-                omp_set_schedule(sched, 0); // We always use OpenMP default chunk size
+                omp_set_schedule(sched, 0); // We always use OpenMP default chunk size by passing 0
                 std::string sched_name = (sched == omp_sched_static) ? "static" :
                         (sched == omp_sched_dynamic) ? "dynamic" :
                         (sched == omp_sched_guided) ? "guided" : "unknown";
@@ -419,10 +418,8 @@ class OctreeBenchmark {
                     for (size_t i = 0; i < benchmarkRadii.size(); i++) {
                         if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
                             benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[i], numThreads[j]);
-                            benchmarkSearchNeighStruct<Kernel_t::cube>(repeats, benchmarkRadii[i], numThreads[j]);
                         } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
                             benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[i], numThreads[j]);
-                            benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[i], numThreads[j]);
                         }
                         printBenchmarkUpdate("Neighbor search - " + sched_name + " schedule - " +
                                                 std::to_string(numThreads[j]) + " threads", 
