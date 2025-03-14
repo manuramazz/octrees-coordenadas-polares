@@ -15,7 +15,7 @@ datasets_high_density=(
 
 radii_high_density="0.05,0.1,0.25,0.5"
 approx_tolerances="5.0,10.0,25.0,50.0,100.0" 
-number_of_threads="1,2,5,10,15,20,25,30,35,40"
+number_of_threads="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40"
 N_SEARCHES=5000
 
 : '
@@ -94,7 +94,7 @@ for dataset in "${datasets[@]}"; do
         echo "Error: File not found - $dataset"
         exit 1
     fi
-    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/parallel" -r "1.0,2.0,3.0" -b "parallel" -s "$N_SEARCHES" --num-threads "$number_of_threads"
+    ./build/rule-based-classifier-cpp -i "$dataset" -o "out/parallel_full" -r "0.5,1.0,2.0,3.0,4.0" -b "parallel" -s "$N_SEARCHES" --num-threads "$number_of_threads"
 done
 
 # This one may be too slow
