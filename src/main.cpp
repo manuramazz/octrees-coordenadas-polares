@@ -107,33 +107,6 @@ void approxSearchBenchmark(std::ofstream &outputFile) {
 }
 
 /**
- * @brief Runs the search benchmark for both sequential slices and random points
- * The start point for the sequential slice is chosed at random from [0, points.size() - numSearches]
- * 
- * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
- */
-template <PointType Point_t, typename Encoder_t>
-void sequentialVsShuffleBenchmark(std::ofstream &outputFile) {
-  auto pointMetaPair = readPointsWithMetadata<Point_t>(mainOptions.inputFile);
-  std::vector<Point_t> points = std::move(pointMetaPair.first);
-  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
-  // Sort the point cloud
-  PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata);
-    
-  // Sequential searchSet
-  const SearchSet<Point_t> searchSetShuffle = SearchSet<Point_t>(mainOptions.numSearches, points, false);
-  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> obShuffled(points, searchSetShuffle, outputFile, metadata, true, "shuffled");
-  obShuffled.searchBench();
-  obShuffled.deleteOctree();
-
-  // Shuffled searchSet
-  const SearchSet<Point_t> searchSetSeq = SearchSet<Point_t>(mainOptions.numSearches, points, true);
-  OctreeBenchmark<LinearOctree, Point_t, Encoder_t> obSeq(points, searchSetSeq, outputFile, metadata, true, "sequential");
-  obSeq.searchBench();
-  obSeq.deleteOctree();
-}
-
-/**
  * @brief Runs the parallel execution benchmark.
  * 
  * Only uses LinearOctree, so don't pass PointEncoding::NoEncoder!
@@ -144,8 +117,9 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile) {
   std::vector<Point_t> points = std::move(pointMetaPair.first);
   std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
   // Sort the point cloud
-  PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata);
-  
+  if constexpr (! std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
+    PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata);
+  }  
   // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
   const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
@@ -249,10 +223,10 @@ int main(int argc, char *argv[]) {
     case BenchmarkMode::APPROX:
       approxSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
-    case BenchmarkMode::SEQUENTIAL:
-      sequentialVsShuffleBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-    break;
     case BenchmarkMode::PARALLEL:
+      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::NoEncoder>(outputFile);
+      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<LinearOctree, Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
       parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
       parallelScalabilityBenchmark<LinearOctree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
     break;

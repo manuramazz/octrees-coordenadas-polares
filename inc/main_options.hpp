@@ -6,10 +6,12 @@
 #include <iostream>
 #include <vector>
 #include "omp.h"
+#include <set>
+#include "NeighborKernels/KernelFactory.hpp"
 
 namespace fs = std::filesystem;
 
-enum BenchmarkMode { SEARCH, COMPARE, SEQUENTIAL, POINT_TYPE, APPROX, PARALLEL, LOG_OCTREE };
+enum BenchmarkMode { SEARCH, COMPARE, POINT_TYPE, APPROX, PARALLEL, LOG_OCTREE };
 
 class main_options
 {
@@ -27,10 +29,10 @@ public:
 	bool searchAll{false};
 	bool checkResults{false};
 	bool useWarmup{true};
-	bool useParallel{true};
 	BenchmarkMode benchmarkMode{SEARCH};
 	std::vector<double> approximateTolerances{50.0};
-	std::vector<size_t> numThreads{omp_get_max_threads()};
+	std::vector<int> numThreads{omp_get_max_threads()};
+	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 };
 
 extern main_options mainOptions;
@@ -44,9 +46,10 @@ enum LongOptions : int
 	CHECK,
 	BENCHMARK,
 	NO_WARMUP,
-	NO_PARALLEL,
 	APPROXIMATE_TOLERANCES,
-	NUM_THREADS
+	NUM_THREADS,
+	SEQUENTIAL_SEARCH_SET,
+	KERNELS
 };
 
 // Define short options
@@ -61,14 +64,17 @@ const option long_opts[] = {
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
 	{ "benchmark", required_argument, nullptr, LongOptions::BENCHMARK },
 	{ "no-warmup", no_argument, nullptr, LongOptions::NO_WARMUP },
-	{ "no-parallel", no_argument, nullptr, LongOptions::NO_PARALLEL },
 	{ "approx-tol", required_argument, nullptr, LongOptions::APPROXIMATE_TOLERANCES },
 	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS},
+	{ "sequential", no_argument, nullptr, LongOptions::SEQUENTIAL_SEARCH_SET},
+	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},
 	{ nullptr, 0, nullptr, 0 }
 };
 
 void printHelp();
-void processArgs(int argc, char** argv);
 void setDefaults();
+std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr);
+std::string getKernelListString();
+void processArgs(int argc, char** argv);
 
 #endif // CPP_MAIN_OPTIONS_HPP

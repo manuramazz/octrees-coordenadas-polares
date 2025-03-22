@@ -87,7 +87,6 @@ for dataset in "${datasets_high_density[@]}"; do
     fi
     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/approx_search" -r "$radii_high_density" -b "approx" -s "$N_SEARCHES" --approx-tol "$approx_tolerances"
 done
-'
 # Parallelization benchmark (we use different radii so it doesnt run forever)
 for dataset in "${datasets[@]}"; do
     if [[ ! -f "$dataset" ]]; then
@@ -105,3 +104,7 @@ done
 #     fi
 #     ./build/rule-based-classifier-cpp -i "$dataset" -o "out/parallel" -r "$radii_high_density" -b "parallel" -s "$N_SEARCHES" --num-threads "$number_of_threads"
 # done
+'
+
+# With all neighbors finding, do Lille_0
+./build/rule-based-classifier-cpp -i "data/paris_lille/Lille_0.las" -o "out/parallel_full" -r "0.5" -b "parallel" -s "all" --sequential --num-threads "1,2,4,8,16,32,40" --no-warmup --repeats 1

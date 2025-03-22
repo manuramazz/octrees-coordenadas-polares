@@ -1,6 +1,9 @@
 #include "main_options.hpp"
 #include <sstream>
 #include <cstdlib>
+#include <set>
+#include "NeighborKernels/KernelFactory.hpp"
+#include <unordered_map>
 
 main_options mainOptions{};
 
@@ -17,16 +20,16 @@ void printHelp()
 		   "-b, --benchmark: Benchmark to run:\n\t" 
 		   "'srch' for comparison between pointer and linear octree, and between point encodings (default),\n\t"
 		   "'comp' for comparison of different linear octree search methods,\n\t"
-		   "'seq' for sequential vs shuffled points,\n\t"
 		   "'pt' for point type comparison,\n\t" 
 		   "'approx' for approximate searches comparison\n\t"
 		   "'struct' for comparing performance on raw vector returned vs structure with octants and extra points\n\t"
 		   "'parallel' for a parallelism scalability benchmark across a number of threads spawned (passed with --num-threads) and with multiple OpenMP schedules\n\t"
 		   "'log' for logging the entire linear octree built, use for debugging\n"
 		   "--no-warmup: Disable warmup phase\n"
-		   "--no-parallel: Disable OpenMP parallelization\n"
-		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n",
-		   "--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)";
+		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n"
+		   "--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)\n"
+		   "--sequential: Make the search set sequential instead of random\n"
+		   "--kernels: Specify which kernels to use (comma-separated, e.g., 'sphere,cube' or 'all')\n";
 	exit(1);
 }
 
@@ -43,6 +46,49 @@ std::vector<T> readVectorArg(const std::string& vStr)
 
 	return v;
 }
+
+std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr) {
+    static const std::unordered_map<std::string, Kernel_t> kernelMap = {
+        {"sphere", Kernel_t::sphere},
+        {"circle", Kernel_t::circle},
+        {"cube", Kernel_t::cube},
+        {"square", Kernel_t::square}
+    };
+
+    std::set<Kernel_t> selectedKernels;
+
+    if (kernelStr == "all") {
+        for (const auto& [key, value] : kernelMap) {
+            selectedKernels.insert(value);
+        }
+    } else {
+        std::stringstream ss(kernelStr);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            auto it = kernelMap.find(token);
+            if (it != kernelMap.end()) {
+                selectedKernels.insert(it->second);
+            } else {
+                std::cerr << "Warning: Unknown kernel '" << token << "' ignored.\n";
+            }
+        }
+    }
+
+    return selectedKernels;
+}
+
+std::string getKernelListString() {
+    std::ostringstream oss;
+    auto it = mainOptions.kernels.begin();
+    for (; it != mainOptions.kernels.end(); ++it) {
+        oss << kernelToString(*it);
+        if (std::next(it) != mainOptions.kernels.end()) {
+            oss << ", ";
+        }
+    }
+    return oss.str();
+}
+
 
 void processArgs(int argc, char** argv)
 {
@@ -92,9 +138,6 @@ void processArgs(int argc, char** argv)
 					mainOptions.benchmarkMode = SEARCH;
 				} else if (std::string(optarg) == "comp") {
 					mainOptions.benchmarkMode = COMPARE;
-				} else if (std::string(optarg) == "seq") {
-					mainOptions.benchmarkMode = SEQUENTIAL;
-					mainOptions.sequentialSearches = true;
 				} else if(std::string(optarg) == "pt") {
 					mainOptions.benchmarkMode = POINT_TYPE;
 				} else if(std::string(optarg) == "log") {
@@ -111,16 +154,18 @@ void processArgs(int argc, char** argv)
 			case LongOptions::NO_WARMUP:
 				mainOptions.useWarmup = false;
 				break;
-			case LongOptions::NO_PARALLEL:
-				mainOptions.useParallel = false;
-				break;
 			case LongOptions::APPROXIMATE_TOLERANCES:
 				mainOptions.approximateTolerances = readVectorArg<double>(std::string(optarg));
 				break;
 			case LongOptions::NUM_THREADS:
-				mainOptions.numThreads = readVectorArg<size_t>(std::string(optarg));
+				mainOptions.numThreads = readVectorArg<int>(std::string(optarg));
 				break;
-			case '?': // Unrecognized option
+			case LongOptions::SEQUENTIAL_SEARCH_SET:
+				mainOptions.sequentialSearches = true;
+				break;
+			case LongOptions::KERNELS:
+				mainOptions.kernels = parseKernelOptions(std::string(optarg));
+				break;
 			default:
 				printHelp();
 				break;
