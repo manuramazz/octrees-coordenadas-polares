@@ -37,7 +37,7 @@ private:
     static constexpr size_t MAX_POINTS = 128;
 
     /// @brief The minimum octant radius to have in a leaf (TODO: this could be implemented in halfLength compuutation, but do we really need it?)
-	static constexpr double MIN_OCTANT_RADIUS = 0.1;
+	static constexpr double MIN_OCTANT_RADIUS = 0;
 
 	/// @brief The default size of the search set in KNN
 	static constexpr size_t DEFAULT_KNN = 100;
@@ -1287,4 +1287,26 @@ public:
         pointsFile << std::flush;
         std::cout << "Done! Octree and points logged" << std::endl;
     }
+
+    void logOctreeBounds(std::ofstream &outputFile, int max_level) {
+        outputFile << "level,upx,upy,upz,downx,downy,downz\n";
+        auto logBounds = [&](uint32_t nodeIndex) {
+            auto nodeCenter = this->centers[nodeIndex];
+            auto nodeRadii = this->radii[nodeIndex];
+            uint32_t nodeDepth = PointEncoding::decodePrefixLength<Encoder_t>(this->prefixes[nodeIndex]) / 3;
+            auto up = nodeCenter + nodeRadii;
+            auto down = nodeCenter - nodeRadii;
+            outputFile << nodeDepth << "," << up.getX() << "," << up.getY() << "," << up.getZ() << "," 
+                << down.getX() << "," << down.getY() << "," << down.getZ() << "\n";
+
+            return nodeDepth+1 <= max_level;
+        };
+        
+        auto logBoundsLeaf = [&](uint32_t nodeIndex) {
+            
+        };
+        
+        singleTraversal(logBounds, logBoundsLeaf);
+	}
+
 };

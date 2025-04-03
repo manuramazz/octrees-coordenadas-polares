@@ -10,3 +10,10 @@ data
 *.log
 *.out
 out_old
+sources
+out_paper
+out_paper_v2
+plots_paper
+table_generator
+benchmark_plots
+reorder_plots

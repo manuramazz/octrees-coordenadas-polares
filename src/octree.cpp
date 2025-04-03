@@ -31,7 +31,7 @@ Octree<Point_t, Encoder_t>::Octree() = default;
 template <PointType Point_t, typename Encoder_t>
 Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata, bool pointsSorted)
 {
-	center_ = mbb(points, radius_);
+	center_ = mbb(points, radii_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
@@ -39,26 +39,26 @@ Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t>& points, std::optional<s
 template <PointType Point_t, typename Encoder_t>
 Octree<Point_t, Encoder_t>::Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata, bool pointsSorted)
 {
-	center_ = mbb(points, radius_);
+	center_ = mbb(points, radii_);
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(const Vector& center, const float radius) : center_(center), radius_(radius)
+Octree<Point_t, Encoder_t>::Octree(const Vector& center, const Vector& radii) : center_(center), radii_(radii)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 };
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(Vector center, float radius, std::vector<Point_t*>& points) : center_(center), radius_(radius)
+Octree<Point_t, Encoder_t>::Octree(Vector center, Vector radii, std::vector<Point_t*>& points) : center_(center), radii_(radii)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
 }
 
 template <PointType Point_t, typename Encoder_t>
-Octree<Point_t, Encoder_t>::Octree(Vector center, float radius, std::vector<Point_t>& points) : center_(center), radius_(radius)
+Octree<Point_t, Encoder_t>::Octree(Vector center, Vector radii, std::vector<Point_t>& points) : center_(center), radii_(radii)
 {
 	octants_.reserve(OCTANTS_PER_NODE);
 	buildOctree(points);
@@ -70,10 +70,12 @@ void Octree<Point_t, Encoder_t>::computeOctreeLimits()
    * Compute the minimum and maximum coordinates of the octree bounding box.
    */
 {
-	min_.setX(center_.getX() - radius_);
-	min_.setY(center_.getY() - radius_);
-	max_.setX(center_.getX() + radius_);
-	max_.setY(center_.getY() + radius_);
+	min_.setX(center_.getX() - radii_.getX());
+	min_.setY(center_.getY() - radii_.getY());
+	min_.setZ(center_.getZ() - radii_.getZ());
+	max_.setX(center_.getX() + radii_.getX());
+	max_.setY(center_.getY() + radii_.getY());
+	max_.setZ(center_.getZ() + radii_.getZ());
 }
 
 template <PointType Point_t, typename Encoder_t>
@@ -237,8 +239,9 @@ void Octree<Point_t, Encoder_t>::insertPoint(Point_t* p)
 		else
 		{
 			// NOTE: This was wrong because it allowed nodes with MAX_POINTS + 1 children
-			// if (points_.size() > MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS) <-- wrong
-			if (points_.size() >= MAX_POINTS && radius_ >= MIN_OCTANT_RADIUS)
+			// if (points_.size() > MAX_POINTS && radii_max >= MIN_OCTANT_RADIUS) <-- wrong
+			if (points_.size() >= MAX_POINTS && std::max(radii_.getX(), 
+				std::max(radii_.getY(), radii_.getZ())) >= MIN_OCTANT_RADIUS)
 			{
 				createOctants(); // Creation of children octree
 				fillOctants();   // Move points from current Octree to its corresponding children.
@@ -261,10 +264,11 @@ void Octree<Point_t, Encoder_t>::createOctants()
 	for (size_t i = 0; i < OCTANTS_PER_NODE; i++)
 	{
 		auto newCenter = center_;
-		newCenter.setX(newCenter.getX() + radius_ * ((i & 4U) != 0U ? 0.5F : -0.5F));
-		newCenter.setY(newCenter.getY() + radius_ * ((i & 2U) != 0U ? 0.5F : -0.5F));
-		newCenter.setZ(newCenter.getZ() + radius_ * ((i & 1U) != 0U ? 0.5F : -0.5F));
-		octants_.emplace_back(newCenter, 0.5F * radius_);
+		newCenter.setX(newCenter.getX() + radii_.getX() * ((i & 4U) != 0U ? 0.5F : -0.5F));
+		newCenter.setY(newCenter.getY() + radii_.getY() * ((i & 2U) != 0U ? 0.5F : -0.5F));
+		newCenter.setZ(newCenter.getZ() + radii_.getZ() * ((i & 1U) != 0U ? 0.5F : -0.5F));
+		Vector newRadii_(radii_.getX()*0.5F, radii_.getY()*0.5F, radii_.getZ()*0.5F);
+		octants_.emplace_back(newCenter, newRadii_);
 	}
 }
 
@@ -360,7 +364,7 @@ void Octree<Point_t, Encoder_t>::writeOctree(std::ofstream& f, size_t index) con
 	index++;
 	f << "Depth: " << index << " "
 	  << "numPoints: " << points_.size() << "\n";
-	f << "Center: " << center_ << " Radius: " << radius_ << "\n";
+	f << "Center: " << center_ << " Radii: " << radii_.getX() << ", " << radii_.getY() << ", " << radii_.getZ() << "\n";
 
 	if (isLeaf())
 	{
@@ -626,7 +630,7 @@ std::vector<Point_t*> Octree<Point_t, Encoder_t>::kClosestCircleNeighbors(const 
 	 */
 {
 	double               rMin = SENSEPSILON * static_cast<double>(k);
-	const double         rMax = 2.0 * M_SQRT2 * radius_;
+	const double         rMax = 2.0 * M_SQRT2 * std::max(radii_.getX(), std::max(radii_.getY(), radii_.getZ()));
 	std::vector<Point_t*> closeNeighbors;
 	for (closeNeighbors = searchCircleNeighbors(p, rMin); closeNeighbors.size() < k && rMin < 2 * rMax; rMin *= 2)
 	{

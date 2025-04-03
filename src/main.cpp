@@ -183,6 +183,55 @@ void linearOctreeLog(std::ofstream &outputFile, bool useGridCloud = false, size_
   encodedPointsFile.close();
 }
 
+void approximateSearchLog(std::ofstream &outputFile) {
+  auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
+  std::vector<Lpoint64> points = std::move(pointMetaPair.first);
+  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+
+  auto lin_oct = LinearOctree<Lpoint64, PointEncoding::MortonEncoder3D>(points, metadata, true);
+  std::array<float, 5> tolerances = {5.0, 10.0, 25.0, 50.0, 100.0};
+  float radius = 3.0;
+  outputFile << "tolerance,upper,x,y,z\n";
+  auto points_exact = lin_oct.searchNeighborsStruct<Kernel_t::sphere>(points[1234], radius);
+  for(const Point &p: points_exact) {
+    outputFile << "0.0,exact," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+  }
+  for(float tol: tolerances) {
+    auto points_upper = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, true);
+    auto points_lower = lin_oct.searchNeighborsApprox<Kernel_t::sphere>(points[1234], 3.0, tol, false);
+    for(const Point &p: points_upper) {
+      outputFile << tol << ",upper," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+    }
+    for(const Point &p: points_lower) {
+      outputFile << tol << ",lower," << p.getX() << "," << p.getY() << "," << p.getZ() << "\n";
+    }
+  }
+}
+
+template <typename Encoder_t>
+void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct) {
+  // std::vector<Lpoint64> points = generateGridCloud<Lpoint64>(16);
+  // std::optional<std::vector<PointMetadata>> metadata;
+
+  auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
+  std::vector<Lpoint64> points = std::move(pointMetaPair.first);
+  std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+
+  if constexpr (! std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
+    PointEncoding::sortPoints<Encoder_t, Lpoint64>(points, metadata);
+  }
+  std::optional<std::vector<PointMetadata>> emptyMetadata;
+  outputFilePoints << std::fixed << std::setprecision(3); 
+  for(size_t i = 0; i<points.size(); i++) {
+    outputFilePoints <<  points[i].getX() << "," << points[i].getY() << "," << points[i].getZ() << "\n";
+  }
+  
+  // build octree and output it
+  if constexpr (! std::is_same_v<Encoder_t, PointEncoding::NoEncoder>) {
+    auto oct = LinearOctree<Lpoint64, Encoder_t>(points, emptyMetadata, true);
+    oct.logOctreeBounds(outputFileOct, 6);
+  }
+}
 int main(int argc, char *argv[]) {
   // Set default OpenMP schedule: dynamic and auto chunk size
   omp_set_schedule(omp_sched_dynamic, 0);
@@ -213,7 +262,7 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::COMPARE:
-      algoCompBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      algoCompBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::POINT_TYPE:
       searchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
@@ -221,20 +270,44 @@ int main(int argc, char *argv[]) {
       searchBenchmark<Lpoint, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::APPROX:
-      approxSearchBenchmark<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      approxSearchBenchmark<Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::PARALLEL:
-      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::NoEncoder>(outputFile);
-      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
-      parallelScalabilityBenchmark<LinearOctree, Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
-      parallelScalabilityBenchmark<Octree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-      parallelScalabilityBenchmark<LinearOctree, Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<Octree, Point, PointEncoding::NoEncoder>(outputFile);
+      //parallelScalabilityBenchmark<Octree, Point, PointEncoding::MortonEncoder3D>(outputFile);
+      //parallelScalabilityBenchmark<LinearOctree, Point, PointEncoding::MortonEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<Octree, Point, PointEncoding::HilbertEncoder3D>(outputFile);
+      parallelScalabilityBenchmark<LinearOctree, Point, PointEncoding::HilbertEncoder3D>(outputFile);
     break;
     case BenchmarkMode::LOG_OCTREE:
-      linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
-      linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile, true, 16);
-      linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
-      linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile, true, 16);
+      std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+      std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+      std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+      std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+      std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+      std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+      // Open files
+      std::ofstream unencodedFile(unencodedPath, std::ios::app);
+      std::ofstream mortonFile(mortonPath, std::ios::app);
+      std::ofstream hilbertFile(hilbertPath, std::ios::app);
+      std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
+      std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
+      std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+      
+      if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+          !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+          throw std::ios_base::failure("Failed to open output files");
+      }
+      
+      std::cout << "Output files created successfully." << std::endl;
+      outputReorderings<PointEncoding::NoEncoder>(unencodedFile, unencodedFileOct);  
+      outputReorderings<PointEncoding::MortonEncoder3D>(mortonFile, mortonFileOct);  
+      outputReorderings<PointEncoding::HilbertEncoder3D>(hilbertFile, hilbertFileOct);  
+      // approximateSearchLog(outputFile);
+      // linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile);
+      // linearOctreeLog<Lpoint64, PointEncoding::MortonEncoder3D>(outputFile, true, 16);
+      // linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile);
+      // linearOctreeLog<Lpoint64, PointEncoding::HilbertEncoder3D>(outputFile, true, 16);
   }
   return EXIT_SUCCESS;
 }

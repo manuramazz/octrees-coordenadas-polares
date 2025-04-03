@@ -22,7 +22,7 @@
 #include <numbers>
 #include <numeric>
 #include <iomanip>
-
+#include <cstdint>
 
 constexpr size_t LOG_FIELD_WIDTH = 32;
 
@@ -138,7 +138,7 @@ constexpr inline bool isNumber(const Time_t x)
 	return (!std::isnan(x) && !std::isinf(x));
 }
 
-template <PointType Point_t>
+template <typename Point_t>
 inline double ccw(const Point_t* p1, const Point_t* p2, const Point_t* p3)
 /**
  * Counter-clockwise situation of 3 points (ccw > 0, cw < 0, colinear = 0)

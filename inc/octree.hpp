@@ -22,17 +22,17 @@ class Octree
 {
 	private:
 	// Keep dividing the octree while octants have more points than these.
-	static constexpr unsigned int MAX_POINTS        = 100;
-	static constexpr float        MIN_OCTANT_RADIUS = 0.1;
+	static constexpr unsigned int MAX_POINTS        = 128;
+	static constexpr float        MIN_OCTANT_RADIUS = 0;
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
 
-	std::vector<Octree>  octants_{};
-	Point                center_{};
-	Point                min_{};
-	Point                max_{};
+	std::vector<Octree>   octants_{};
+	Point                 center_{};
+	Point                 min_{};
+	Point                 max_{};
 	std::vector<Point_t*> points_{};
-	float                radius_{};
+	Vector   radii_{};
 
 	public:
 	using PointType = Point_t;
@@ -41,9 +41,9 @@ class Octree
 	explicit Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
 	explicit Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
 
-	Octree(const Point& center, float radius);
-	Octree(Point center, float radius, std::vector<Point_t*>& points);
-	Octree(Point center, float radius, std::vector<Point_t>& points);
+	Octree(const Point& center, const Vector& radii);
+	Octree(Point center, Vector radii, std::vector<Point_t*>& points);
+	Octree(Point center, Vector radii, std::vector<Point_t>& points);
 
 	[[nodiscard]] inline const std::vector<Octree>& getOctants() const { return octants_; }
 
@@ -57,7 +57,7 @@ class Octree
 	[[nodiscard]] inline auto getNumPoints() const { return points_.size(); }
 
 	inline void setPoints(const std::vector<Point_t*>& points) { points_ = points; }
-	inline void setRadius(float radius) { radius_ = radius; }
+	inline void setRadii(Vector radii) { radii_ = radii; }
 
 	[[nodiscard]] inline const Point& getMin() const { return min_; }
 	[[nodiscard]] inline const Point& getMax() const { return max_; }
@@ -69,7 +69,7 @@ class Octree
    * @brief Computes the point density of the given Octree as nPoints / Volume
    */
 	{
-		return static_cast<double>(points_.size()) / (radius_ * radius_ + radius_);
+		return static_cast<double>(points_.size()) / (radii_.getX() * radii_.getY() + radii_.getZ());
 	}
 
 	void writeDensities(const std::filesystem::path& path) const;
@@ -96,7 +96,7 @@ class Octree
 	void buildOctree(std::vector<Point_t*>& points);
 
 	[[nodiscard]] inline auto& getCenter() const { return center_; }
-	[[nodiscard]] inline auto  getRadius() const { return radius_; }
+	[[nodiscard]] inline auto  getRadii() const { return radii_; }
 
 	template<Kernel_t kernel_type = Kernel_t::square>
 	[[nodiscard]] inline std::vector<Point_t*> searchNeighbors(const Point& p, double radius) const
@@ -197,7 +197,7 @@ class Octree
 			else
 			{
 				std::copy_if(std::begin(octree.octants_), std::end(octree.octants_), std::back_inserter(toVisit),
-				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
+				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadii()); });
 			}
 		}
 		return ptsInside;
@@ -304,7 +304,7 @@ class Octree
 			else
 			{
 				std::copy_if(std::begin(octree.octants_), std::end(octree.octants_), std::back_inserter(toVisit),
-				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
+				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadii()); });
 			}
 		}
 
@@ -335,7 +335,7 @@ class Octree
 			else
 			{
 				std::copy_if(std::begin(octree.octants_), std::end(octree.octants_), std::back_inserter(toVisit),
-				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadius()); });
+				             [&](const Octree& octant) { return k.boxOverlap(octant.getCenter(), octant.getRadii()); });
 			}
 		}
 
