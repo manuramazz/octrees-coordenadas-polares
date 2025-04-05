@@ -5,11 +5,11 @@
 #include <bitset>
 #include <unordered_map>
 #include <filesystem>
-#include "PointEncoding/common.hpp"
+#include "PointEncoding/point_encoder.hpp"
+#include "PointEncoding/no_encoding.hpp"
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
 #include "Geometry/Box.hpp"
-#include "Geometry/PointMetadata.hpp"
 #include "type_names.hpp"
 #include "neighbor_set.hpp"
 
@@ -27,11 +27,16 @@
 * @date 16/11/2024
 * 
 */
-template <PointType Point_t = Lpoint64, typename Encoder_t = PointEncoding::NoEncoder>
+
+template <typename Point_t>
 class LinearOctree {
+
 private:
-    using key_t = typename Encoder_t::key_t;
-    using coords_t = typename Encoder_t::coords_t;
+    using PointEncoder = PointEncoding::PointEncoder;
+    using key_t = PointEncoding::key_t;
+    using coords_t = PointEncoding::coords_t;
+
+    PointEncoder& enc;
 
     /// @brief The maximum number of points in a leaf
     static constexpr size_t MAX_POINTS = 128;
@@ -98,7 +103,7 @@ private:
     std::vector<uint32_t> parents; // TODO: this may not be needed
 
     /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
-    std::vector<size_t> levelRange = std::vector<size_t>(Encoder_t::MAX_DEPTH + 2);
+    std::vector<size_t> levelRange;
 
     /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
     std::vector<int32_t> internalToLeaf;
@@ -112,9 +117,6 @@ private:
      * encodings. Therefore, this array is altered inside this class. This is done to  locality that Morton/Hilbert
      */
     std::vector<Point_t> &points;
-    
-    /// @brief LAS metadata in case it is separate from the Point_t array. It will be sorted parallel to points.
-    std::optional<std::vector<PointMetadata>>& metadata;
 
     /// @brief The encodings of the points in the octree
     std::vector<key_t> codes;
@@ -129,7 +131,7 @@ private:
     Box bbox = Box(Point(), Vector());
 
     /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
-    Vector precomputedRadii[Encoder_t::MAX_DEPTH + 1];
+    std::vector<Vector> precomputedRadii;
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     double halfLengths[3];
@@ -141,7 +143,7 @@ private:
         return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
     }
 
-    /// @brief Returns the memory footprint of the octree (without counting points or metadata memory)
+    /// @brief Returns the memory footprint of the octree (without counting points)
     size_t computeMemorySize() {
         size_t total_size = 0;
         total_size += vectorMemorySize(leaves);
@@ -158,7 +160,7 @@ private:
         total_size += vectorMemorySize(codes);
         total_size += vectorMemorySize(centers);
         total_size += vectorMemorySize(radii);
-        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(bbox) + sizeof(maxDepthSeen) + sizeof(points) + sizeof(metadata);
+        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(bbox) + sizeof(maxDepthSeen) + sizeof(points);
         return total_size;
     }
 
@@ -208,22 +210,22 @@ private:
         uint32_t nodeCount = counts[index];
         // Decide if we split this leaf or not
         // split into 4 layers
-        if (nodeCount > MAX_POINTS * 512 && level + 3 < Encoder_t::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 512 && level + 3 < enc.maxDepth()) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 4);
             return 4096; 
         }
         // split into 3 layers
-        if (nodeCount > MAX_POINTS * 64 && level + 2 < Encoder_t::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 64 && level + 2 < enc.maxDepth()) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 3);
             return 512;
         }
         // split into 2 layers
-        if (nodeCount > MAX_POINTS * 8 && level + 1 < Encoder_t::MAX_DEPTH) { 
+        if (nodeCount > MAX_POINTS * 8 && level + 1 < enc.maxDepth()) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 2);
             return 64; 
         }
         // split into 1 layer
-        if (nodeCount > MAX_POINTS && level < Encoder_t::MAX_DEPTH ) { 
+        if (nodeCount > MAX_POINTS && level < enc.maxDepth()) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 1);
             return 8; 
         }
@@ -242,16 +244,16 @@ private:
     inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
         key_t node = leaves[index];
         key_t range = leaves[index+1] - node;
-        uint32_t level = PointEncoding::getLevel<Encoder_t>(range);
+        uint32_t level = enc.getLevel(range);
         if(level == 0) {
             return {-1, level};
         }
 
-        uint32_t siblingId = PointEncoding::getSiblingId<Encoder_t>(node, level);
+        uint32_t siblingId = enc.getSiblingId(node, level);
 
         // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
         // to the code parent and the next parent is the range spanned by two consecutive codes at that level
-        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + PointEncoding::nodeRange<Encoder_t>(level - 1));
+        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + enc.nodeRange(level - 1));
         if(!siblingsOnTree) siblingId = -1;
 
         return {siblingId, level};
@@ -310,7 +312,7 @@ private:
     
         key_t node = leaves[index];
         key_t range = leaves[index+1] - node;
-        uint32_t level = PointEncoding::getLevel<Encoder_t>(range);
+        uint32_t level = enc.getLevel(range);
 
         // The new position to put the node into (nodeOps value after exclusive scan)
         size_t newNodeIndex = nodeOps[index]; 
@@ -319,8 +321,8 @@ private:
         newLeaves[newNodeIndex] = node;
         if(opCode > 1) {
             // Split the node into 8^L as marked by the opCode, add the adequate codes to the new leaves
-            uint32_t levelDiff = PointEncoding::log8ceil<Encoder_t>(opCode);
-            key_t gap = PointEncoding::nodeRange<Encoder_t>(level + levelDiff);
+            uint32_t levelDiff = enc.log8ceil(opCode);
+            key_t gap = enc.nodeRange(level + levelDiff);
             for (size_t sibling = 1; sibling < opCode; sibling++) {
                 newLeaves[newNodeIndex + sibling] = newLeaves[newNodeIndex + sibling - 1] + gap;
             }
@@ -384,7 +386,7 @@ private:
         int32_t ret = 0;
         for (uint32_t l = 1; l <= level + 1; ++l)
         {
-            uint32_t digit = PointEncoding::octalDigit<Encoder_t>(key, l);
+            uint32_t digit = enc.octalDigit(key, l);
             ret += digitWeight(digit);
         }
         return ret;
@@ -400,14 +402,14 @@ private:
     void createUnsortedLayout() {
         for(size_t i = 0; i<nLeaf; i++) {
             key_t key = leaves[i];
-            uint32_t level = PointEncoding::getLevel<Encoder_t>(leaves[i+1] - key);
-            prefixes[i + nInternal] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, level);
+            uint32_t level = enc.getLevel(leaves[i+1] - key);
+            prefixes[i + nInternal] = enc.encodePlaceholderBit(key, level);
             internalToLeaf[i + nInternal] = i + nInternal;
 
-            uint32_t prefixLength = PointEncoding::commonPrefix<Encoder_t>(key, leaves[i+1]);
+            uint32_t prefixLength = enc.commonPrefix(key, leaves[i+1]);
             if(prefixLength % 3 == 0 && i < nLeaf - 1) {
                 uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
-                prefixes[octIndex] = PointEncoding::encodePlaceholderBit<Encoder_t>(key, prefixLength / 3);
+                prefixes[octIndex] = enc.encodePlaceholderBit(key, prefixLength / 3);
                 internalToLeaf[octIndex] = octIndex;
             }
         }
@@ -415,11 +417,11 @@ private:
 
     /// @brief Determine octree subdivision level boundaries
     void getLevelRange() {
-        for(uint32_t level = 0; level <= Encoder_t::MAX_DEPTH; level++) {
-            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), PointEncoding::encodePlaceholderBit<Encoder_t>(0, level));
+        for(uint32_t level = 0; level <= enc.maxDepth(); level++) {
+            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), enc.encodePlaceholderBit(0, level));
             levelRange[level] = std::distance(prefixes.begin(), it);
         }
-        levelRange[Encoder_t::MAX_DEPTH + 1] = nTotal;
+        levelRange[enc.maxDepth() + 1] = nTotal;
     }
 
     /// @brief Extract parent/child relationships from binary tree and translate to sorted order
@@ -427,12 +429,12 @@ private:
         for(int i = 0; i<nInternal; i++) {
             size_t idxA = leafToInternal[i];
             key_t prefix = prefixes[idxA];
-            key_t nodeKey = PointEncoding::decodePlaceholderBit<Encoder_t>(prefix);
-            unsigned prefixLength = PointEncoding::decodePrefixLength<Encoder_t>(prefix);
+            key_t nodeKey = enc.decodePlaceholderBit(prefix);
+            unsigned prefixLength = enc.decodePrefixLength(prefix);
             unsigned level = prefixLength / 3;
-            assert(level < Encoder_t::MAX_DEPTH);
+            assert(level < enc.maxDepth());
 
-            key_t childPrefix = PointEncoding::encodePlaceholderBit<Encoder_t>(nodeKey, level + 1);
+            key_t childPrefix = enc.encodePlaceholderBit(nodeKey, level + 1);
 
             size_t leafSearchStart = levelRange[level + 1];
             size_t leafSearchEnd   = levelRange[level + 2];
@@ -494,8 +496,11 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t> &points, std::optional<std::vector<PointMetadata>> &metadata = std::nullopt, 
-        bool pointsSorted = false, bool printLog = true): points(points), metadata(metadata) {
+    explicit LinearOctree(std::vector<Point_t> &points, PointEncoder& enc, bool printLog = true): points(points), enc(enc) {
+        static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>, 
+            "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
+        precomputedRadii = std::vector<Vector>(enc.maxDepth() + 1);
+        levelRange = std::vector<size_t>(enc.maxDepth() + 2);
         double total_time = 0.0;
         TimeWatcher tw;
         auto buildStep = [&](auto &&step, const std::string action) {
@@ -515,11 +520,7 @@ public:
             std::cout << "Linear octree build steps summary:\n";
         }
         buildStep([&] { setupBbox(); }, "Finding bounding box:");
-        if(pointsSorted) {
-            buildStep([&] { encodePoints(); }, "Point encoding:");
-        } else {
-            buildStep([&] { sortPoints(); }, "Point encoding and sorting:");
-        }
+        buildStep([&] { encodePoints(); }, "Point encoding:");
         buildStep([&] { buildOctreeLeaves(); }, "Leaf construction:");
         buildStep([&] { resize(); }, "Memory allocation:");
         buildStep([&] { buildOctreeInternal(); }, "Internal part and linking:");
@@ -556,12 +557,12 @@ public:
         bbox = Box(center, radii);
 
         // Compute the physical half lengths for multiplying with the encoded coordinates
-        halfLengths[0] = 0.5f * Encoder_t::EPS * (bbox.maxX() - bbox.minX());
-        halfLengths[1] = 0.5f * Encoder_t::EPS * (bbox.maxY() - bbox.minY());
-        halfLengths[2] = 0.5f * Encoder_t::EPS * (bbox.maxZ() - bbox.minZ());
+        halfLengths[0] = 0.5f * enc.eps() * (bbox.maxX() - bbox.minX());
+        halfLengths[1] = 0.5f * enc.eps() * (bbox.maxY() - bbox.minY());
+        halfLengths[2] = 0.5f * enc.eps() * (bbox.maxZ() - bbox.minZ());
 
-        for(int i = 0; i<= Encoder_t::MAX_DEPTH; i++) {
-            coords_t sideLength = (1u << (Encoder_t::MAX_DEPTH - i));
+        for(int i = 0; i <= enc.maxDepth(); i++) {
+            coords_t sideLength = (1u << (enc.maxDepth() - i));
             precomputedRadii[i] = Vector(
                 sideLength * halfLengths[0],
                 sideLength * halfLengths[1],
@@ -571,28 +572,18 @@ public:
     }
 
     /**
-     * @brief This function computes the morton encodings of the points and sorts them in
-     * the given order
-     * 
-     * @details The points array is changed after this step
-     */
-    void sortPoints() {
-        codes = PointEncoding::sortPoints<Encoder_t, Point_t>(points, metadata, bbox);
-    }
-
-    /**
      * @brief This function computes the encodins but does not sort (it is called on the ctor when the 
      * points are already sorted beforehand to not sort them again)
      */
     void encodePoints() {
-        codes = PointEncoding::encodePoints<Encoder_t, Point_t>(points, bbox);
+        codes = enc.encodePoints<Point_t>(points, bbox);
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()
     void buildOctreeLeaves() {
         // Builds the octree sequentially using the cornerstone algorithm
         // We start with 0, UPPER_BOUND on the leaves. Remember that UPPER_BOUND is 100000...000 with as many 0s as MAX_DEPTH, and it can never be reached by a code
-        leaves = {0, Encoder_t::UPPER_BOUND};
+        leaves = std::vector<key_t>{0, enc.upperBound()};
         counts = {codes.size()};
 
         while(!updateOctreeLeaves())
@@ -705,10 +696,10 @@ public:
     void computeGeometry() {
         for(uint32_t i = 0; i<prefixes.size(); i++) {
             key_t prefix = prefixes[i];
-            key_t startKey = PointEncoding::decodePlaceholderBit<Encoder_t>(prefix);
-            uint32_t level = PointEncoding::decodePrefixLength<Encoder_t>(prefix) / 3;
+            key_t startKey = enc.decodePlaceholderBit(prefix);
+            uint32_t level = enc.decodePrefixLength(prefix) / 3;
             std::tie(centers[i], radii[i]) = 
-                PointEncoding::getCenterAndRadii<Encoder_t>(startKey, level, bbox, halfLengths, precomputedRadii);
+                enc.getCenterAndRadii(startKey, level, bbox, halfLengths, precomputedRadii);
         }
     }
 
@@ -767,7 +758,7 @@ public:
      * @brief Search neighbors function. Given kernel that already contains a point and a radius, return the points inside the region.
      * @param k specific kernel that contains the data of the region (center and radius)
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
+     * The signature of the function should be equivalent to `bool cnd(const typename &p);`
      * @param root The morton code for the node to start (usually the tree root which is 0)
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
@@ -821,7 +812,7 @@ public:
      * pointers to each individual point found. 
      * @param k specific kernel that contains the data of the region (center and radius)
      * @param condition function that takes a candidate neighbor point and imposes an additional condition (should return a boolean).
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
+     * The signature of the function should be equivalent to `bool cnd(const typename &p);`
      * @param root The morton code for the node to start (usually the tree root which is 0)
      * @return Points inside the given kernel type. Actually the same as ptsInside.
      */
@@ -907,7 +898,7 @@ public:
         auto checkBoxIntersect = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-            uint32_t nodeDepth = PointEncoding::decodePrefixLength<Encoder_t>(this->prefixes[nodeIndex]) / 3;
+            uint32_t nodeDepth = enc.decodePrefixLength(this->prefixes[nodeIndex]) / 3;
             if(nodeDepth > precisionLevel) {
                 // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
@@ -994,7 +985,7 @@ public:
      * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
      * @param p Center of the kernel to be used
      * @param radius Radius of the kernel to be used
-     * The signature of the function should be equivalent to `bool cnd(const PointType &p);`
+     * The signature of the function should be equivalent to `bool cnd(const typename &p);`
      * @return Points inside the given kernel
      */
 	template<typename Kernel>
@@ -1261,7 +1252,7 @@ public:
     void logOctree(std::ofstream &file, std::ofstream &pointsFile) {
         std::cout << "(1/2) Logging octree parameters and structure" << std::endl;
         std::string pointTypeName = getPointName<Point_t>();
-        std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
+        std::string encoderTypename = enc.getEncoderName();
         file << "---- Linear octree parameters ----";
         file << "Encoder: " << encoderTypename << "\n";
         file << "Point type: " << pointTypeName << "\n";
@@ -1293,7 +1284,7 @@ public:
         auto logBounds = [&](uint32_t nodeIndex) {
             auto nodeCenter = this->centers[nodeIndex];
             auto nodeRadii = this->radii[nodeIndex];
-            uint32_t nodeDepth = PointEncoding::decodePrefixLength<Encoder_t>(this->prefixes[nodeIndex]) / 3;
+            uint32_t nodeDepth = enc.decodePrefixLength(this->prefixes[nodeIndex]) / 3;
             auto up = nodeCenter + nodeRadii;
             auto down = nodeCenter - nodeRadii;
             outputFile << nodeDepth << "," << up.getX() << "," << up.getY() << "," << up.getZ() << "," 

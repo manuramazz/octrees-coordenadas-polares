@@ -13,10 +13,12 @@
 
 using namespace ResultChecking;
 
-template <template <typename, typename> class Octree_t, PointType Point_t, typename Encoder_t>
+template <template <typename> class Octree_t, typename Point_t>
 class OctreeBenchmark {
     private:
-        std::unique_ptr<Octree_t<Point_t, Encoder_t>> oct;
+        using PointEncoder = PointEncoding::PointEncoder;
+        std::unique_ptr<Octree_t<Point_t>> oct;
+        PointEncoder& enc;
         const std::string comment;
 
         std::vector<Point_t>& points;
@@ -136,14 +138,14 @@ class OctreeBenchmark {
             }
             // append the comment to the octree name if needed
             std::string octreeName;
-            if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+            if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 octreeName = "LinearOctree";
-            } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 octreeName = "Octree";
             }
 
             std::string pointTypeName = getPointName<Point_t>();
-            std::string encoderTypename = PointEncoding::getEncoderName<Encoder_t>();
+            std::string encoderName = enc.getEncoderName();
             // if the comment, exists, append it to the op. name
             std::string fullOp = operation + ((comment != "") ? "_" + comment : "");
 
@@ -167,7 +169,7 @@ class OctreeBenchmark {
             outputFile << getCurrentDate() << ',' 
                 << octreeName << ',' 
                 << pointTypeName << ','
-                << encoderTypename << ','
+                << enc.getEncoderName() << ','
                 << points.size() << ','
                 << fullOp << ',' 
                 << kernel << ',' 
@@ -189,17 +191,27 @@ class OctreeBenchmark {
         }
 
     public:
-        OctreeBenchmark(std::vector<Point_t>& points, const SearchSet<Point_t>& searchSet, 
-            std::ofstream &file, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt,
-            bool pointsSorted = false, std::string comment = "", bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
+        OctreeBenchmark(std::vector<Point_t>& points, PointEncoder& enc, const SearchSet<Point_t>& searchSet, 
+            std::ofstream &file, bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
             points(points), 
+            enc(enc),
             searchSet(searchSet),
-            oct(std::make_unique<Octree_t<Point_t, Encoder_t>>(points, metadata, pointsSorted)),
             outputFile(file),
-            comment(comment),
             checkResults(checkResults),
             useWarmup(useWarmup),
-            resultSet(searchSet) { }
+            resultSet(searchSet) { 
+
+            // Conditional initialization of oct based on the type of Octree_t<Point_t>
+            if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
+                // Initialize for LinearOctree
+                oct = std::make_unique<LinearOctree<Point_t>>(points, enc);
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+                // Initialize for Octree
+                oct = std::make_unique<Octree<Point_t>>(points);
+            } else {
+                static_assert(false, "Unsupported Octree type");
+            }
+        }
     
 
         template<Kernel_t kernel>
@@ -257,15 +269,15 @@ class OctreeBenchmark {
             // Displaying the basic information with formatting
             std::cout << std::fixed << std::setprecision(3);
             std::string octreeName;
-            if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+            if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 octreeName = "LinearOctree";
-            } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 octreeName = "Octree";
             }
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Running benchmark:"        << std::setw(LOG_FIELD_WIDTH) << bench_name                      << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Octree used:"              << std::setw(LOG_FIELD_WIDTH) << octreeName        << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Point type:"               << std::setw(LOG_FIELD_WIDTH) << getPointName<Point_t>()           << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << PointEncoding::getEncoderName<Encoder_t>() << "\n";
+            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Encoder:"                  << std::setw(LOG_FIELD_WIDTH) << enc.getEncoderName() << "\n";
             std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Radii:";
 
             // Outputting radii values in a similar structured format
@@ -382,9 +394,9 @@ class OctreeBenchmark {
             const size_t repeats = mainOptions.repeats;
 
             if(checkResults) {
-                if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+                if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                     resultSet.resultsNeighStruct.resize(searchSet.numSearches);
-                } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+                } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                     resultSet.resultsNeigh.resize(searchSet.numSearches);
                 }
                 resultSet.resultsNumNeigh.resize(searchSet.numSearches);
@@ -393,7 +405,7 @@ class OctreeBenchmark {
             size_t total = benchmarkRadii.size();
             size_t current = 1;
             for(size_t i = 0; i<benchmarkRadii.size(); i++) {
-                if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, LinearOctree<Point_t, Encoder_t>>) {
+                if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                     // Linear octree, oldneighbors
                     for (const auto& kernel : mainOptions.kernels) {
                         if (kernel == Kernel_t::sphere) {
@@ -418,7 +430,7 @@ class OctreeBenchmark {
                             benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[i]);
                         }
                     }
-                } else if constexpr (std::is_same_v<Octree_t<Point_t, Encoder_t>, Octree<Point_t, Encoder_t>>) {
+                } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                     // Pointer-based octree, neighbors
                     for (const auto& kernel : mainOptions.kernels) {
                         if (kernel == Kernel_t::sphere) {

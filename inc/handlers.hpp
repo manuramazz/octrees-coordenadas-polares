@@ -99,7 +99,7 @@ std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readPointCloudMeta(c
 	return points_meta;
 }
 
-template<PointType Point_t>
+template<typename Point_t>
 void pointCloudReadLog(const std::vector<Point_t> &points, TimeWatcher &tw, const fs::path& fileName) {
     auto mem_size = (sizeof(std::vector<Point_t>) + (sizeof(Point_t) * points.size())) / (1024.0 * 1024.0);
     const std::string mem_size_str = std::to_string(mem_size) + " MB";
@@ -116,7 +116,7 @@ void pointCloudReadLog(const std::vector<Point_t> &points, TimeWatcher &tw, cons
     std::cout << std::endl;
 }
 
-template <PointType Point_t>
+template <typename Point_t>
 auto readPointsWithMetadata(const fs::path& fileName) {
     TimeWatcher tw;
     tw.start();

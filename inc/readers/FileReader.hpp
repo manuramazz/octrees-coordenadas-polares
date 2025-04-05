@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
  * @author Miguel Yermo
  * @brief Abstract class defining common behavor for all file readers
  */
-template <PointType Point_t>
+template <typename Point_t>
 class FileReader
 {
 	protected:

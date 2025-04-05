@@ -7,7 +7,7 @@
 
 namespace ResultChecking {
     
-    template <PointType Point_t>
+    template <typename Point_t>
     struct ResultSet {
         const SearchSet<Point_t>& searchSet;
         std::vector<std::vector<Point_t*>> resultsNeigh;

@@ -11,7 +11,7 @@
 /**
  * @brief Specialization of FileRead to read .txt/.xyz files
  */
-template <PointType Point_t>
+template <typename Point_t>
 class TxtFileReader : public FileReader<Point_t>
 {
 	public:

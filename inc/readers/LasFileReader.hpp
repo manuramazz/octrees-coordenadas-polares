@@ -16,7 +16,7 @@
  * @author Miguel Yermo
  * @brief Specialization of FileRead to read .las/.laz files
  */
-template <PointType Point_t>
+template <typename Point_t>
 class LasFileReader : public FileReader<Point_t>
 {
 	public:

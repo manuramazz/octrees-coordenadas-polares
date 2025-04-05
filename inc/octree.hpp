@@ -15,9 +15,7 @@
 #include <vector>
 #include <optional>
 
-// Encoder is not used here, but points may already be sorted by the Encoder. We add it as template argument
-// for simplicity.
-template <PointType Point_t, typename Encoder_t>
+template <typename Point_t>
 class Octree
 {
 	private:
@@ -35,11 +33,10 @@ class Octree
 	Vector   radii_{};
 
 	public:
-	using PointType = Point_t;
 	Octree();
 	// ignore pointsSorted
-	explicit Octree(std::vector<Point_t>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
-	explicit Octree(std::vector<Point_t*>& points, std::optional<std::vector<PointMetadata>>& metadata = std::nullopt, bool pointsSorted = false);
+	explicit Octree(std::vector<Point_t>& points);
+	explicit Octree(std::vector<Point_t*>& points);
 
 	Octree(const Point& center, const Vector& radii);
 	Octree(Point center, Vector radii, std::vector<Point_t*>& points);

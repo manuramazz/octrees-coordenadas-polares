@@ -41,7 +41,7 @@ class FileReaderFactory
 	 * @param numCols Number of columns of the txt file. Default = 0
 	 * @return
 	 */
-	template <PointType Point_t>
+	template <typename Point_t>
 	static std::shared_ptr<FileReader<Point_t>> makeReader(FileReader_t type, const fs::path& path)
 	{
 		switch (type)
