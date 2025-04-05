@@ -62,7 +62,7 @@ class OctreeBenchmarkOld {
                 }
         }
 
-        bool checkNeighSearchResults(float radii) {
+        bool checkNeighSearchResults(double radii) {
             bool correct = true;
             for(int i = 0; i<numSearches; i++) {
                 auto point = searchResultsPointer[i];
@@ -169,7 +169,7 @@ class OctreeBenchmarkOld {
             return correct;
         }
 
-        bool checkNumNeighResults(float radii) {
+        bool checkNumNeighResults(double radii) {
             bool correct = true;
             for(int i = 0; i<numSearches; i++) {
                 size_t point = numNeighResultsPointer[i];
@@ -326,7 +326,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void pointerOctreeSearchNeigh(float radii) {
+        void pointerOctreeSearchNeigh(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS){
@@ -339,7 +339,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void oldLinearSearchNeigh(float radii) {
+        void oldLinearSearchNeigh(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS){
@@ -352,7 +352,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void linearOctreeNeighborSearch(float radii) {
+        void linearOctreeNeighborSearch(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS){
@@ -364,7 +364,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void pointerOctreeNumNeigh(float radii) {
+        void pointerOctreeNumNeigh(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS) {
@@ -376,7 +376,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void oldLinearOctreeNumNeigh(float radii) {
+        void oldLinearOctreeNumNeigh(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS) {
@@ -388,7 +388,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void linearOctreeNumNeigh(float radii) {
+        void linearOctreeNumNeigh(double radii) {
             #pragma omp parallel for schedule(static)
                 for(int i = 0; i<numSearches; i++) {
                     if(CHECK_RESULTS) {
@@ -480,7 +480,7 @@ class OctreeBenchmarkOld {
         }
 
         inline void appendToCsv(const std::string& octree, const std::string& operation, 
-                            const std::string& kernel, const float radius, const benchmarking::Stats<>& stats) {
+                            const std::string& kernel, const double radius, const benchmarking::Stats<>& stats) {
             // Open the file in append mode
             std::string csvFilename = mainOptions.inputFileName + "-" + startTimestamp + ".csv";
             std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
@@ -530,7 +530,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void benchmarkSearchNeigh(size_t repeats, float radius) {
+        void benchmarkSearchNeigh(size_t repeats, double radius) {
             const auto kernelStr = kernelToString(kernel);
 
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeSearchNeigh<kernel>(radius); });
@@ -544,7 +544,7 @@ class OctreeBenchmarkOld {
         }
 
         template<Kernel_t kernel>
-        void benchmarkNumNeigh(size_t repeats, float radius) {
+        void benchmarkNumNeigh(size_t repeats, double radius) {
             const auto kernelStr = kernelToString(kernel);
 
             auto statsPointer = benchmarking::benchmark(repeats, [&]() { pointerOctreeNumNeigh<kernel>(radius); });

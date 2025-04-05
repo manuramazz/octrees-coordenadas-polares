@@ -7,7 +7,7 @@
 // Forward declaration
 class Region;
 
-// Follows Point Data Record Format 2 from the LAS standard, but with double coordinates and intensity and a point ID
+// Follows Point Data Record Format 2 from the LAS standard
 // https://www.asprs.org/wp-content/uploads/2010/12/LAS_1_4_r13.pdf
 struct Lpoint : public Point {
 protected:
