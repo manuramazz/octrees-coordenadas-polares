@@ -40,6 +40,12 @@ class MortonEncoder3D : public PointEncoder {
         libmorton::morton3D_64_decode(code, x, y, z);
     }
 
+    key_t encodeFromPoint(const Point& p, const Box &bbox) const override {
+        coords_t x, y, z;
+        getAnchorCoords(p, bbox, x, y, z);
+		return encode(x, y, z);
+    }
+
     // Getters
     inline uint32_t maxDepth() const override { return MAX_DEPTH; }
     inline double eps() const override { return EPS; }

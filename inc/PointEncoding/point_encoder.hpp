@@ -3,6 +3,7 @@
 #include "Geometry/point.hpp"
 #include "Geometry/Box.hpp"
 #include <cstdint>
+#include "encoding_octree_log.hpp"
 
 // Base class for all Encoders
 namespace PointEncoding {
@@ -45,14 +46,9 @@ public:
         y = std::min((coords_t) (y_transf * (1 << (maxDepth()))), maxCoord);
         z = std::min((coords_t) (z_transf * (1 << (maxDepth()))), maxCoord);
     }
-
+    
     /// @brief A wrapper for doing PointEncoding::getAnchorCoords + encode in one single step     
-    template <typename Point_t>
-    inline key_t encodeFromPoint(const Point_t& p, const Box &bbox) const {
-        coords_t x, y, z;
-        getAnchorCoords(p, bbox, x, y, z);
-		return encode(x, y, z);
-    }
+    virtual key_t encodeFromPoint(const Point& p, const Box& bbox) const = 0;
 
     template <typename Point_t>
     std::vector<key_t> encodePoints(const std::vector<Point_t> &points, const Box &bbox) const {
@@ -76,44 +72,55 @@ public:
      * @param bbox The precomputed global bounding box of points
      */
     template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox) const {
+    std::vector<key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         // Temporal vector of pairs
-        // TODO: find a better way, since this consumes a lot of extra memory 
         std::vector<std::pair<key_t, Point_t>> encoded_points(points.size());
-
+        TimeWatcher tw;
+        tw.start();
         // Compute encodings in parallel
-        // TODO: look into better omp schedules for this
         #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
                 encoded_points[i] = std::make_pair(encodeFromPoint(points[i], bbox), points[i]);
             }
-
-        // TODO: implement parallel radix sort and stop using vector of pairs if possible (only sort the encodings)
+        tw.stop();
+        if(log)
+            log->encodingTime = tw.getElapsedDecimalSeconds();
+        // Sort the points
+        tw.start();
         std::sort(encoded_points.begin(), encoded_points.end(),
             [](const auto& a, const auto& b) {
                 return a.first < b.first;  // Compare only the morton codes
         });
         
         // Copy back sorted codes and points in parallel
-        // TODO: look into better omp schedules for this
         std::vector<key_t> codes(points.size());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
                 codes[i] = encoded_points[i].first;
                 points[i] = encoded_points[i].second;
             }
+        tw.stop();
+        if(log)
+            log->sortingTime = tw.getElapsedDecimalSeconds();
         return codes;
     }
 
     template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points) const {
+    std::pair<Box, std::vector<key_t>> sortPoints(std::vector<Point_t> &points, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         // Find the bbox
         Vector radii;
         Point center = mbb(points, radii);
+        TimeWatcher tw;
+        tw.start();
         Box bbox = Box(center, radii);
-
+        tw.stop();
+        if(log) {
+            log->boundingBoxTime = tw.getElapsedDecimalSeconds();
+            log->encoderType = getShortEncoderName();
+            log->cloudSize = points.size();
+        }
         // Call the regular sortPoints
-        return sortPoints<Point_t>(points, bbox);
+        return std::make_pair(bbox, sortPoints<Point_t>(points, bbox, log));
     }
 
     /**
@@ -122,10 +129,10 @@ public:
      */
     template <typename Point_t>
     std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox) const {
+        std::optional<std::vector<PointMetadata>> &meta_opt, const Box &bbox, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         if(!meta_opt.has_value()) {
             // regular sort without metadata
-            return sortPoints<Point_t>(points, bbox);
+            return sortPoints<Point_t>(points, bbox, log);
         }
         // Temporal vector of 3-tuples
         // TODO: find a better way, since this consumes a lot of extra memory 
@@ -133,38 +140,51 @@ public:
         std::vector<std::tuple<key_t, Point_t, PointMetadata>> encoded_points(points.size());
 
         // Compute encodings in parallel
-        // TODO: look into better omp schedules for this
-        #pragma omp parallel for
+        TimeWatcher tw;
+        tw.start();
+        #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
                 encoded_points[i] = std::make_tuple(encodeFromPoint(points[i], bbox), points[i], metadata[i]);
             }
-        
+        tw.stop();
+        if(log)
+            log->encodingTime = tw.getElapsedDecimalSeconds();
+        tw.start();
         // TODO: implement parallel radix sort and stop using vector of tuples if possible (only sort the encodings)
         std::sort(encoded_points.begin(), encoded_points.end(),
             [](const auto& a, const auto& b) {
-                return std::get<0>(a) < std::get<0>(b);  // Compare only the morton codes
+                return std::get<0>(a) < std::get<0>(b);  // Compare only the codes
         });
         
         // Copy back sorted codes, points, and metadata in parallel
-        // TODO: look into better omp schedules for this
         std::vector<key_t> codes(points.size());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
             for(size_t i = 0; i < points.size(); i++) {
                 std::tie(codes[i], points[i], metadata[i]) = encoded_points[i];
             }
+        tw.stop();
+        if(log)
+            log->sortingTime = tw.getElapsedDecimalSeconds();
         return codes;
     }
 
     template <typename Point_t>
-    std::vector<key_t> sortPoints(std::vector<Point_t> &points, 
-        std::optional<std::vector<PointMetadata>> &meta_opt) const {
+    std::pair<Box, std::vector<key_t>> sortPoints(std::vector<Point_t> &points, 
+        std::optional<std::vector<PointMetadata>> &meta_opt, std::shared_ptr<EncodingOctreeLog> log = nullptr) const {
         // Find the bbox
         Vector radii;
         Point center = mbb(points, radii);
+        TimeWatcher tw;
+        tw.start();
         Box bbox = Box(center, radii);
-
+        tw.stop();
+        if(log) {
+            log->boundingBoxTime = tw.getElapsedDecimalSeconds();
+            log->encoderType = getShortEncoderName();
+            log->cloudSize = points.size();
+        }
         // Call the regular sortPoints with metadata
-        return sortPoints<Point_t>(points, meta_opt, bbox);
+        return std::make_pair(bbox, sortPoints<Point_t>(points, meta_opt, bbox, log));
     }
 
 

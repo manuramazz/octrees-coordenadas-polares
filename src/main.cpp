@@ -20,6 +20,7 @@
 #include "PointEncoding/point_encoder_factory.hpp"
 #include "result_checking.hpp"
 #include "omp.h"
+#include "encoding_octree_log.hpp"
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -214,6 +215,30 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     }
 }
 
+template <template <typename> class Octree_t, typename Point_t>
+void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
+    std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
+    log->pointType = getPointName<Point_t>();
+    auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto& enc = getEncoder(encoding);
+    enc.sortPoints<Point_t>(points, metadata, log);
+    if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
+        LinearOctree<Point_t> oct(points, enc, log);
+        std::cout << "TEST"  << std::endl;
+    } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+        TimeWatcher tw;
+        tw.start();
+        Octree<Point_t> oct(points);
+        tw.stop();
+        log->totalTime = tw.getElapsedDecimalSeconds();
+        log->octreeType = "Octree";
+    }
+    std::cout << *log << std::endl;
+    log->toCSV(outputFile);
+}
+
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pointMetaPair = readPointsWithMetadata<Lpoint64>(mainOptions.inputFile);
     std::vector<Lpoint64> points = std::move(pointMetaPair.first);
@@ -281,29 +306,37 @@ int main(int argc, char *argv[]) {
             parallelScalabilityBenchmark<LinearOctree, Point>(outputFile, EncoderType::HILBERT_ENCODER_3D);
         break;
         case BenchmarkMode::LOG_OCTREE:
-            std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-            std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-            std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-            std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-            std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-            std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-            // Open files
-            std::ofstream unencodedFile(unencodedPath, std::ios::app);
-            std::ofstream mortonFile(mortonPath, std::ios::app);
-            std::ofstream hilbertFile(hilbertPath, std::ios::app);
-            std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
-            std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
-            std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+            // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+            // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+            // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+            // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+            // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+            // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+            // // Open files
+            // std::ofstream unencodedFile(unencodedPath, std::ios::app);
+            // std::ofstream mortonFile(mortonPath, std::ios::app);
+            // std::ofstream hilbertFile(hilbertPath, std::ios::app);
+            // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
+            // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
+            // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
             
-            if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-                !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-                throw std::ios_base::failure("Failed to open output files");
-            }
+            // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+            //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+            //     throw std::ios_base::failure("Failed to open output files");
+            // }
             
-            std::cout << "Output files created successfully." << std::endl;
-            outputReorderings(unencodedFile, unencodedFileOct);  
-            outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-            outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+            // std::cout << "Output files created successfully." << std::endl;
+            // outputReorderings(unencodedFile, unencodedFileOct);  
+            // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+            // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+            std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
+            std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath, std::ios::app);
+            EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
+            encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<LinearOctree, Lpoint64>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+            encodingAndOctreeLog<Octree, Lpoint64>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
     }
     return EXIT_SUCCESS;
 }

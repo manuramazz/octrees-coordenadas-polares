@@ -19,20 +19,17 @@ class NoEncoding : public PointEncoder {
         x = 0, y = 0, z = 0;
     }
 
-    template <typename Point_t>
-    inline key_t encodeFromPoint(const Point_t& p, const Box &bbox) const {
+    key_t encodeFromPoint(const Point& p, const Box &bbox) const override {
         return 0;
     }
 
     template <typename Point_t>
     std::vector<key_t> encodePoints(const std::vector<Point_t> &points, const Box &bbox) const {
         return std::vector<key_t>(0);
-
     }
     template <typename Point_t>
     std::vector<key_t> sortPoints(std::vector<Point_t> &points, const Box &bbox) const {
         return std::vector<key_t>(0);
-
     }
     template <typename Point_t>
     std::vector<key_t> sortPoints(std::vector<Point_t> &points) const {

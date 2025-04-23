@@ -12,6 +12,7 @@
 #include "Geometry/Box.hpp"
 #include "type_names.hpp"
 #include "neighbor_set.hpp"
+#include "encoding_octree_log.hpp"
 
 /**
 * @class LinearOctree
@@ -496,49 +497,47 @@ public:
      * @details The points will be sorted in-place by the order given by the encoding to allow
      * spatial data locality
      */
-    explicit LinearOctree(std::vector<Point_t> &points, PointEncoder& enc, bool printLog = true): points(points), enc(enc) {
-        static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>, 
-            "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
+    explicit LinearOctree(std::vector<Point_t>& points,
+                        PointEncoder& enc,
+                        std::shared_ptr<EncodingOctreeLog> log = nullptr)
+        : points(points), enc(enc) {
+
+        static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
+                    "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
+
         precomputedRadii = std::vector<Vector>(enc.maxDepth() + 1);
         levelRange = std::vector<size_t>(enc.maxDepth() + 2);
-        double total_time = 0.0;
+
+        double totalTime = 0.0;
         TimeWatcher tw;
-        auto buildStep = [&](auto &&step, const std::string action) {
+
+        auto buildStep = [&](auto&& step, double* logField = nullptr) {
             tw.start();
             step();
             tw.stop();
-            total_time += tw.getElapsedDecimalSeconds();
-            if(printLog) {
-                const std::string time_ellapsed_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
-                std::cout   << std::left << std::setw(LOG_FIELD_WIDTH) << action
-                            << std::setw(LOG_FIELD_WIDTH) << time_ellapsed_str << "\n";
-            }
+            const double elapsed = tw.getElapsedDecimalSeconds();
+            totalTime += elapsed;
+            if (logField) *logField = elapsed;
         };
 
-        if(printLog){
-            std::cout << std::fixed << std::setprecision(3); 
-            std::cout << "Linear octree build steps summary:\n";
-        }
-        buildStep([&] { setupBbox(); }, "Finding bounding box:");
-        buildStep([&] { encodePoints(); }, "Point encoding:");
-        buildStep([&] { buildOctreeLeaves(); }, "Leaf construction:");
-        buildStep([&] { resize(); }, "Memory allocation:");
-        buildStep([&] { buildOctreeInternal(); }, "Internal part and linking:");
-        buildStep([&] { computeGeometry(); }, "Geometry computing:");
-        std::cout << std::endl;
+        buildStep([&] { setupBbox(); },          log ? &log->boundingBoxTime            : nullptr);
+        buildStep([&] { encodePoints(); },       log ? &log->encodingTime2              : nullptr);
+        buildStep([&] { buildOctreeLeaves(); },  log ? &log->leafConstructionTime       : nullptr);
+        buildStep([&] { resize(); },             log ? &log->internalMemAllocTime       : nullptr);
+        buildStep([&] { buildOctreeInternal(); },log ? &log->internalConstructionTime   : nullptr);
+        buildStep([&] { computeGeometry(); },    log ? &log->geometryTime               : nullptr);
 
-        if(printLog) {
-            const std::string total_build_time_str = std::to_string(tw.getElapsedDecimalSeconds()) + " seconds";
-            const std::string memory_str = std::to_string(computeMemorySize() / (1024*1024)) + " MB";
-            std::cout << "Linear octree statistics:\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Total time to build:"                  << std::setw(LOG_FIELD_WIDTH) << total_build_time_str << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Extra memory used:"                    << std::setw(LOG_FIELD_WIDTH) << memory_str << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Total number of nodes:"                << std::setw(LOG_FIELD_WIDTH) << nTotal << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "  Leafs:"                              << std::setw(LOG_FIELD_WIDTH) << nLeaf << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "  Internal nodes:"                     << std::setw(LOG_FIELD_WIDTH) << nInternal << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Max. depth seen:"                      << std::setw(LOG_FIELD_WIDTH) << maxDepthSeen << "\n";
-            std::cout << std::left << std::setw(LOG_FIELD_WIDTH) << "Min. radii seen:"                      << std::setw(LOG_FIELD_WIDTH) << precomputedRadii[maxDepthSeen].getX() << "\n";
-            std::cout << std::endl;
+        if (log) {
+            log->MAX_POINTS = MAX_POINTS;
+            log->MIN_OCTANT_RADIUS = MIN_OCTANT_RADIUS;
+            log->octreeType = "LinearOctree";
+            log->totalTime = totalTime;
+            log->memoryUsed = computeMemorySize();
+            log->totalNodes = nTotal;
+            log->leafNodes = nLeaf;
+            log->internalNodes = nInternal;
+            log->maxDepthSeen = maxDepthSeen;
+            log->minRadiusAtMaxDepth = precomputedRadii[maxDepthSeen].getX();
         }
     }
     
