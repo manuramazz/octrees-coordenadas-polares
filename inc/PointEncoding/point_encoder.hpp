@@ -112,6 +112,13 @@ public:
         Point center = mbb(points, radii);
         Box bbox = Box(center, radii);
         tw.stop();
+        std::cout << "NON-PARALLEL: center " << center << " , radii " << radii << " time: " << tw.getElapsedDecimalSeconds() << std::endl;
+        tw.start();
+        Vector radii_parallel;
+        Point center_parallel = mbb_parallel(points, radii_parallel);
+        Box bbox_parallel = Box(center_parallel, radii_parallel);
+        tw.stop();
+        std::cout << "PARALLEL: center " << center_parallel << " , radii " << radii_parallel << " time: " << tw.getElapsedDecimalSeconds()  << std::endl;
         if(log) {
             log->boundingBoxTime = tw.getElapsedDecimalSeconds();
             log->encoderType = getShortEncoderName();

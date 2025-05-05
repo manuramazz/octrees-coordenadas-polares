@@ -17,3 +17,4 @@ plots_paper
 table_generator
 benchmark_plots
 reorder_plots
+enc_build_times*

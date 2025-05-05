@@ -33,6 +33,7 @@ public:
 	std::vector<double> approximateTolerances{50.0};
 	std::vector<int> numThreads{omp_get_max_threads()};
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
+	size_t maxPointsLeaf = 128;
 };
 
 extern main_options mainOptions;
@@ -49,7 +50,8 @@ enum LongOptions : int
 	APPROXIMATE_TOLERANCES,
 	NUM_THREADS,
 	SEQUENTIAL_SEARCH_SET,
-	KERNELS
+	KERNELS,
+	MAX_POINTS_LEAF
 };
 
 // Define short options
@@ -68,6 +70,7 @@ const option long_opts[] = {
 	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS},
 	{ "sequential", no_argument, nullptr, LongOptions::SEQUENTIAL_SEARCH_SET},
 	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},
+	{ "max-leaf", required_argument, nullptr, LongOptions::MAX_POINTS_LEAF},
 	{ nullptr, 0, nullptr, 0 }
 };
 

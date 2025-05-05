@@ -95,158 +95,97 @@ class Box
 	}
 };
 
-// Functions
+
 template<typename Point_t>
 inline Point mbb(const std::vector<Point_t>& points, Vector& maxRadius)
 requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
 {
-	Point min;
-	Point max;
+	double minX = std::numeric_limits<double>::max();
+	double minY = std::numeric_limits<double>::max();
+	double minZ = std::numeric_limits<double>::max();
+	double maxX = -std::numeric_limits<double>::max();
+	double maxY = -std::numeric_limits<double>::max();
+	double maxZ = -std::numeric_limits<double>::max();
 
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (const Point& p : points)
+	#pragma omp parallel
 	{
-		if (p.getX() < min.getX()) { min.setX(p.getX()); }
-		if (p.getX() > max.getX()) { max.setX(p.getX()); }
-		if (p.getY() < min.getY()) { min.setY(p.getY()); }
-		if (p.getY() > max.getY()) { max.setY(p.getY()); }
-		if (p.getZ() < min.getZ()) { min.setZ(p.getZ()); }
-		if (p.getZ() > max.getZ()) { max.setZ(p.getZ()); }
+		double localMinX = minX, localMinY = minY, localMinZ = minZ;
+		double localMaxX = maxX, localMaxY = maxY, localMaxZ = maxZ;
+
+		#pragma omp for schedule(static) nowait
+		for (size_t i = 0; i < points.size(); ++i) {
+			const Point& p = points[i];
+			localMinX = std::min(localMinX, p.getX());
+			localMaxX = std::max(localMaxX, p.getX());
+			localMinY = std::min(localMinY, p.getY());
+			localMaxY = std::max(localMaxY, p.getY());
+			localMinZ = std::min(localMinZ, p.getZ());
+			localMaxZ = std::max(localMaxZ, p.getZ());
+		}
+
+		#pragma omp critical
+		{
+			minX = std::min(minX, localMinX);
+			maxX = std::max(maxX, localMaxX);
+			minY = std::min(minY, localMinY);
+			maxY = std::max(maxY, localMaxY);
+			minZ = std::min(minZ, localMinZ);
+			maxZ = std::max(maxZ, localMaxZ);
+		}
 	}
 
+	Point min(minX, minY, minZ);
+	Point max(maxX, maxY, maxZ);
 	Box box(std::pair<Point, Point>{ min, max });
 
 	maxRadius = box.radii();
-
 	return midpoint(min, max);
 }
 
 template<typename Point_t>
 inline Point mbb(const std::vector<Point_t*>& points, Vector& maxRadius)
 requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
 {
-	Point min;
-	Point max;
+	double minX = std::numeric_limits<double>::max();
+	double minY = std::numeric_limits<double>::max();
+	double minZ = std::numeric_limits<double>::max();
+	double maxX = -std::numeric_limits<double>::max();
+	double maxY = -std::numeric_limits<double>::max();
+	double maxZ = -std::numeric_limits<double>::max();
 
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (Point* p : points)
+	#pragma omp parallel
 	{
-		if (p->getX() < min.getX()) { min.setX(p->getX()); }
-		if (p->getX() > max.getX()) { max.setX(p->getX()); }
-		if (p->getY() < min.getY()) { min.setY(p->getY()); }
-		if (p->getY() > max.getY()) { max.setY(p->getY()); }
-		if (p->getZ() < min.getZ()) { min.setZ(p->getZ()); }
-		if (p->getZ() > max.getZ()) { max.setZ(p->getZ()); }
+		double localMinX = minX, localMinY = minY, localMinZ = minZ;
+		double localMaxX = maxX, localMaxY = maxY, localMaxZ = maxZ;
+
+		#pragma omp for schedule(static) nowait
+		for (size_t i = 0; i < points.size(); ++i) {
+			const Point* p = points[i];
+			localMinX = std::min(localMinX, p->getX());
+			localMaxX = std::max(localMaxX, p->getX());
+			localMinY = std::min(localMinY, p->getY());
+			localMaxY = std::max(localMaxY, p->getY());
+			localMinZ = std::min(localMinZ, p->getZ());
+			localMaxZ = std::max(localMaxZ, p->getZ());
+		}
+
+		#pragma omp critical
+		{
+			minX = std::min(minX, localMinX);
+			maxX = std::max(maxX, localMaxX);
+			minY = std::min(minY, localMinY);
+			maxY = std::max(maxY, localMaxY);
+			minZ = std::min(minZ, localMinZ);
+			maxZ = std::max(maxZ, localMaxZ);
+		}
 	}
-	
+
+	Point min(minX, minY, minZ);
+	Point max(maxX, maxY, maxZ);
 	Box box(std::pair<Point, Point>{ min, max });
 
 	maxRadius = box.radii();
-
 	return midpoint(min, max);
-}
-
-
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t>& points, float& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
-{
-	Point min;
-	Point max;
-
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (const Point& p : points)
-	{
-		if (p.getX() < min.getX()) { min.setX(p.getX()); }
-		if (p.getX() > max.getX()) { max.setX(p.getX()); }
-		if (p.getY() < min.getY()) { min.setY(p.getY()); }
-		if (p.getY() > max.getY()) { max.setY(p.getY()); }
-		if (p.getZ() < min.getZ()) { min.setZ(p.getZ()); }
-		if (p.getZ() > max.getZ()) { max.setZ(p.getZ()); }
-	}
-
-	Box box(std::pair<Point, Point>{ min, max });
-
-	maxRadius = std::max({ box.radii().getX(), box.radii().getY(), box.radii().getZ() });
-
-	return midpoint(min, max);
-}
-
-template<typename Point_t>
-inline Point mbb(const std::vector<Point_t*>& points, float& maxRadius)
-requires std::is_base_of_v<Point, Point_t>
-/**
- * Computes the minimum bounding box of a set of points
- * @param points Array of points' pointers
- * @param numPoints Number of points
- * @param[out] maxRadius Maximum radius of the bounding box
- * @return (Point) center of the bounding box
- */
-{
-	Point min;
-	Point max;
-
-	min.setX(std::numeric_limits<double>::max());
-	min.setY(std::numeric_limits<double>::max());
-	min.setZ(std::numeric_limits<double>::max());
-
-	max.setX(-std::numeric_limits<double>::max());
-	max.setY(-std::numeric_limits<double>::max());
-	max.setZ(-std::numeric_limits<double>::max());
-
-	for (Point* p : points)
-	{
-		if (p->getX() < min.getX()) { min.setX(p->getX()); }
-		if (p->getX() > max.getX()) { max.setX(p->getX()); }
-		if (p->getY() < min.getY()) { min.setY(p->getY()); }
-		if (p->getY() > max.getY()) { max.setY(p->getY()); }
-		if (p->getZ() < min.getZ()) { min.setZ(p->getZ()); }
-		if (p->getZ() > max.getZ()) { max.setZ(p->getZ()); }
-	}
-
-	return Box::mbbRadii(min, max, maxRadius);
 }
 
 inline void makeBox(const Point& p, double radius, Vector& min, Vector& max)

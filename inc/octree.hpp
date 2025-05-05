@@ -20,11 +20,10 @@ class Octree
 {
 	private:
 	// Keep dividing the octree while octants have more points than these.
-	static constexpr unsigned int MAX_POINTS        = 128;
 	static constexpr float        MIN_OCTANT_RADIUS = 0;
 	static constexpr size_t       DEFAULT_KNN       = 100;
 	static constexpr short        OCTANTS_PER_NODE  = 8;
-
+	
 	std::vector<Octree>   octants_{};
 	Point                 center_{};
 	Point                 min_{};

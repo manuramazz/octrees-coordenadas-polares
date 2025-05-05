@@ -29,7 +29,8 @@ void printHelp()
 		   "--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n"
 		   "--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)\n"
 		   "--sequential: Make the search set sequential instead of random\n"
-		   "--kernels: Specify which kernels to use (comma-separated, e.g., 'sphere,cube' or 'all')\n";
+		   "--kernels: Specify which kernels to use (comma-separated, e.g., 'sphere,cube' or 'all')\n"
+		   "--max-leaf: Maximum numbers of points in an octree leaf (default = 128)\n";
 	exit(1);
 }
 
@@ -165,6 +166,9 @@ void processArgs(int argc, char** argv)
 				break;
 			case LongOptions::KERNELS:
 				mainOptions.kernels = parseKernelOptions(std::string(optarg));
+				break;
+			case LongOptions::MAX_POINTS_LEAF:
+				mainOptions.maxPointsLeaf = std::stoul(std::string(optarg));
 				break;
 			default:
 				printHelp();

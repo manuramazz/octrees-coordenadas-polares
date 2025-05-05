@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include "Geometry/Lpoint.hpp"
 #include "Geometry/Lpoint64.hpp"
+#include "main_options.hpp"
 
 template class Octree<Point>;
 template class Octree<Lpoint>;
@@ -250,7 +251,7 @@ void Octree<Point_t>::insertPoint(Point_t* p)
 		{
 			// NOTE: This was wrong because it allowed nodes with MAX_POINTS + 1 children
 			// if (points_.size() > MAX_POINTS && radii_max >= MIN_OCTANT_RADIUS) <-- wrong
-			if (points_.size() >= MAX_POINTS && std::max(radii_.getX(), 
+			if (points_.size() >= mainOptions.maxPointsLeaf && std::max(radii_.getX(), 
 				std::max(radii_.getY(), radii_.getZ())) >= MIN_OCTANT_RADIUS)
 			{
 				createOctants(); // Creation of children octree

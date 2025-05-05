@@ -228,10 +228,13 @@ int main(int argc, char *argv[]) {
     // Open the benchmark output file
     std::string csvFilename = mainOptions.inputFileName + "-" + getCurrentDate() + ".csv";
     std::filesystem::path csvPath = mainOptions.outputDirName / csvFilename;
-    std::ofstream outputFile(csvPath, std::ios::app);
-    if (!outputFile.is_open()) {
-        throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
-    }
+    std::ofstream outputFile;
+    if(mainOptions.benchmarkMode != BenchmarkMode::LOG_OCTREE) {
+        outputFile = std::ofstream(csvPath, std::ios::app);
+        if (!outputFile.is_open()) {
+            throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
+        }
+     }
 
     switch(mainOptions.benchmarkMode) {
         case BenchmarkMode::SEARCH:

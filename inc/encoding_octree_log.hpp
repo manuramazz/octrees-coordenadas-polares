@@ -90,13 +90,12 @@ struct EncodingOctreeLog {
     static void writeCSVHeader(std::ostream& out) {
         out  << "point_type,"
              << "oct_type,"
-             << "enc_type,"
              << "max_leaf_points,"
+             << "enc_type,"
              << "cloud_size,"
              << "bbox_time,"
              << "enc_time,"
              << "sort_time,"
-             << "max_leaf_points,"
              << "min_oct_radius,"
              << "octree_leaf_time,"
              << "octree_internal_time,"
@@ -108,5 +107,4 @@ struct EncodingOctreeLog {
              << "max_depth_seen,"
              << "min_radii_seen\n";
     }
-    
 };
