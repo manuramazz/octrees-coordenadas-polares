@@ -11,28 +11,27 @@
 #include "util.hpp"
 #include "Geometry/point.hpp"
 #include "Geometry/PointMetadata.hpp"
+#include "omp.h"
 
 /**
  * @author Miguel Yermo
  * @brief Specialization of FileRead to read .las/.laz files
  */
 template <typename Point_t>
-class LasFileReader : public FileReader<Point_t>
+class LasFileReaderParallel : public FileReader<Point_t>
 {
 	public:
 	// ***  CONSTRUCTION / DESTRUCTION  *** //
 	// ************************************ //
-	LasFileReader(const fs::path& path) : FileReader<Point_t>(path){};
-	~LasFileReader(){};
+	LasFileReaderParallel(const fs::path& path) : FileReader<Point_t>(path){};
+	~LasFileReaderParallel(){};
 
 	/**
 	 * @brief Reads the points contained in the .las/.laz file
 	 * @return Vector of point_t
 	 */
-	std::vector<Point_t> read()
-	{
+	std::vector<Point_t> read() {
 		std::vector<Point_t> points;
-
 		// LAS File reading
 		LASreadOpener lasreadopener;
 		lasreadopener.set_file_name(this->path.c_str());
@@ -52,46 +51,54 @@ class LasFileReader : public FileReader<Point_t>
 
   		// Get total number of points for progress bar
 		size_t total_points = lasreader->header.number_of_point_records;
-
-		// Reset reader to beginning
-		lasreadopener.set_file_name(this->path.c_str());
-		lasreader = lasreadopener.open();
-
-		// Termination condition
-		auto terminationCondition = [&lasreader]() { 
-			return lasreader->read_point(); 
-		};
-
-		// Point creation
-		auto pointInserter = [&](size_t& idx) {
-			points.emplace_back(
-				idx, 
-				static_cast<double>(lasreader->point.get_X() * xScale + xOffset),
-				static_cast<double>(lasreader->point.get_Y() * yScale + yOffset),
-				static_cast<double>(lasreader->point.get_Z() * zScale + zOffset),
-				static_cast<double>(lasreader->point.get_intensity()),
-				static_cast<unsigned short>(lasreader->point.get_return_number()),
-				static_cast<unsigned short>(lasreader->point.get_number_of_returns()),
-				static_cast<unsigned short>(lasreader->point.get_scan_direction_flag()),
-				static_cast<unsigned short>(lasreader->point.get_edge_of_flight_line()),
-				static_cast<unsigned short>(lasreader->point.get_classification()),
-				static_cast<char>(lasreader->point.get_scan_angle_rank()),
-				static_cast<unsigned short>(lasreader->point.get_user_data()),
-				static_cast<unsigned short>(lasreader->point.get_point_source_ID()),
-				static_cast<unsigned int>(lasreader->point.get_R()),
-				static_cast<unsigned int>(lasreader->point.get_G()),
-				static_cast<unsigned int>(lasreader->point.get_B())
-			);
-		};
-
-		this->file_reading_loop(terminationCondition, pointInserter, total_points, false);
-
-		// Cleanup
+		points.resize(total_points);
 		lasreader->close();
 		delete lasreader;
+
+		// Helper to create a new LASreader for each thread and seek the file to the correct position
+		auto createReaderAndSeek = [this](size_t start_idx) -> LASreader* {
+			LASreadOpener opener;
+			opener.set_file_name(this->path.c_str());
+			LASreader* lasreader = opener.open();
+			lasreader->seek(start_idx);
+			return lasreader;
+		};
+
+		int num_threads = omp_get_max_threads();
+		size_t points_per_thread = total_points / num_threads;
+		#pragma omp parallel num_threads(num_threads)
+		{
+			int tid = omp_get_thread_num();
+			size_t start = tid * points_per_thread;
+			size_t end = (tid == num_threads - 1) ? total_points : start + points_per_thread;
+			LASreader* reader = createReaderAndSeek(start);
+			for (size_t i = start; i < end; ++i) {
+				if (!reader->read_point()) break;
+				points[i] = Point_t(
+					i,
+					static_cast<double>(reader->point.get_X() * xScale + xOffset),
+					static_cast<double>(reader->point.get_Y() * yScale + yOffset),
+					static_cast<double>(reader->point.get_Z() * zScale + zOffset),
+					static_cast<double>(reader->point.get_intensity()),
+					static_cast<unsigned short>(reader->point.get_return_number()),
+					static_cast<unsigned short>(reader->point.get_number_of_returns()),
+					static_cast<unsigned short>(reader->point.get_scan_direction_flag()),
+					static_cast<unsigned short>(reader->point.get_edge_of_flight_line()),
+					static_cast<unsigned short>(reader->point.get_classification()),
+					static_cast<char>(reader->point.get_scan_angle_rank()),
+					static_cast<unsigned short>(reader->point.get_user_data()),
+					static_cast<unsigned short>(reader->point.get_point_source_ID()),
+					static_cast<unsigned int>(reader->point.get_R()),
+					static_cast<unsigned int>(reader->point.get_G()),
+					static_cast<unsigned int>(reader->point.get_B())
+				);
+			}
+			reader->close();
+			delete reader;
+		}
 		return points;
 	}
-
+	
 	std::pair<std::vector<Point_t>, std::vector<PointMetadata>> readMeta()
 	{
 		std::vector<Point_t> points;

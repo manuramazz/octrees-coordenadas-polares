@@ -5,6 +5,7 @@
 #pragma once
 #include "util.hpp"
 #include "LasFileReader.hpp"
+#include "LasFileReaderParallel.hpp"
 #include "TxtFileReader.hpp"
 #include <filesystem>
 

@@ -40,15 +40,15 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
     const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
-    OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
-    obPointer.searchBench();
-    obPointer.deleteOctree();
+    // OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
+    // obPointer.searchBench();
+    // obPointer.deleteOctree();
     if(encoding != EncoderType::NO_ENCODING) {
         OctreeBenchmark<LinearOctree, Point_t> obLinear(points,  codes, box, enc, searchSet, outputFile);
         obLinear.searchBench();
         obLinear.deleteOctree();
-        if(mainOptions.checkResults)
-            ResultChecking::checkResultsLinearVsPointer(obLinear.getResultSet(), obPointer.getResultSet());
+        // if(mainOptions.checkResults)
+        //     ResultChecking::checkResultsLinearVsPointer(obLinear.getResultSet(), obPointer.getResultSet());
     }
 }
 
@@ -125,12 +125,14 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
         return;
     if(mainOptions.useWarmup) {
         auto [codesWarmup, boxWarmup] = enc.sortPoints<Point_t>(points, metadata, log);
-        std::cout << "encoding warmup times - bbox: " << log->boundingBoxTime << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << "\n";
+        std::cout << "encoding warmup times - bbox: " << log->boundingBoxTime 
+            << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << std::endl;
     }
     for(int i = 0; i<mainOptions.repeats; i++) {
         auto [codesRepeat, boxRepeat] = enc.sortPoints<Point_t>(points, metadata, log);
         totalBbox += log->boundingBoxTime, totalEnc += log->encodingTime, totalSort += log->sortingTime;
-        std::cout << "encoding repeat #" << i << " times - bbox: " << log->boundingBoxTime << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << "\n";
+        std::cout << "encoding repeat #" << i << " times - bbox: " << log->boundingBoxTime 
+            << " enc:  " << log->encodingTime << " sort: " << log->sortingTime << std::endl;
         if(i == mainOptions.repeats - 1) {
             codes = std::move(codesRepeat);
             box = std::move(boxRepeat);
@@ -143,12 +145,12 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
         double totalInternal = 0.0, totalLeaf = 0.0;
         if(mainOptions.useWarmup) {
             LinearOctree<Point_t> oct(points, codes, box, enc, log);
-            std::cout << "linear octree total warmup time: " << log->octreeTime << "\n";
+            std::cout << "linear octree total warmup time: " << log->octreeTime << std::endl;
         }
         for(int i = 0; i<mainOptions.repeats; i++) {
             LinearOctree<Point_t> oct(points, codes, box, enc, log);
             totalLeaf += log->octreeLeafTime, totalInternal += log->octreeInternalTime;
-            std::cout << "linear octree repeat #" << i << " time: " << log->octreeTime << "\n";
+            std::cout << "linear octree repeat #" << i << " time: " << log->octreeTime << std::endl;
         }
         log->octreeLeafTime = totalLeaf / mainOptions.repeats;
         log->octreeInternalTime = totalInternal / mainOptions.repeats;
@@ -209,8 +211,8 @@ int main(int argc, char *argv[]) {
         if (!outputFile.is_open()) {
             throw std::ios_base::failure(std::string("Failed to open benchmark output file: ") + csvPath.string());
         }
-        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
-            searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
+        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING))
+        //     searchBenchmark<Lpoint>(outputFile, EncoderType::NO_ENCODING);
         if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D))
             searchBenchmark<Lpoint>(outputFile, EncoderType::MORTON_ENCODER_3D);
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))

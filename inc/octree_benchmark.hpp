@@ -269,9 +269,9 @@ class OctreeBenchmark {
             size_t availableAlgos = 0;
             size_t execPerAlgo = mainOptions.numThreads.size() * mainOptions.benchmarkRadii.size();
 
-            if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
+            if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
                 if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) availableAlgos = 1;
-            } else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+            } else if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.size();
                 if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) availableAlgos--;
             }
