@@ -6,36 +6,57 @@
 
 template <typename Point_t>
 struct SearchSet {
-    const size_t numSearches;
-    std::vector<size_t> searchPoints;
-    bool sequential;
-    
-    /**
-     * @brief Construct a vector of n indexes that can be either sequential or randomly sampled.
-     * 
-     * @param n The size of the searchSet to be contructed
-     * @param points A reference to the array of points (not stored for now)
-     * @param seq Whether to choose a sequential slice of points or sample random points
-     * @param all Whether to have all the indexes on the searchSet. If set to true, then n=points.size() and seq=True
-     * Only use all in small clouds and with a reasonable radius, since otherwise it will take forever to run the neighborSearches!
-     */
-    SearchSet(size_t n, const std::vector<Point_t>& points, bool seq = mainOptions.sequentialSearches, 
-            bool all = mainOptions.searchAll)
-        : numSearches(all ? points.size() : n), sequential(seq || all) {
-        std::mt19937 rng;
-        rng.seed(42);
-        searchPoints.reserve(numSearches);
-        if(sequential) {
-            std::uniform_int_distribution<size_t> startIndexDist(0, points.size() - numSearches);
-            size_t startIndex = startIndexDist(rng);
-            for (size_t i = 0; i < numSearches; ++i) {
-                searchPoints.push_back(startIndex + i);
-            }
-        } else {
-            std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
-            for (size_t i = 0; i < numSearches; ++i) {
-                searchPoints.push_back(indexDist(rng));
+    // a different one for each repeat on random subsets
+        std::vector<std::vector<size_t>> searchPoints;
+        int currentRepeat;
+        const size_t numSearches;
+        bool sequential;
+
+        /**
+         * @brief Construct a vector of n indexes that can be either sequential or randomly sampled.
+         * 
+         * @param n The size of the searchSet to be contructed
+         * @param points A reference to the array of points (not stored for now)
+         * @param seq Whether to choose a sequential slice of points or sample random points
+         * @param all Whether to have all the indexes on the searchSet. If set to true, then n=points.size() and seq=True
+         * Only use all in small clouds and with a reasonable radius, since otherwise it will take forever to run the neighborSearches!
+         */
+        SearchSet(size_t n, const std::vector<Point_t>& points, bool seq = mainOptions.sequentialSearches, 
+                bool all = mainOptions.searchAll)
+            : numSearches(all ? points.size() : n), sequential(seq || all), currentRepeat(0) {
+            std::mt19937 rng;
+            rng.seed(42);
+            if(numSearches != points.size()) {
+                searchPoints.resize(mainOptions.repeats);
+                for(int repeat = 0; repeat < mainOptions.repeats; repeat++) {
+                    searchPoints[repeat].reserve(numSearches);
+                    if(sequential) {
+                        std::uniform_int_distribution<size_t> startIndexDist(0, points.size() - numSearches);
+                        size_t startIndex = startIndexDist(rng);
+                        for (size_t i = 0; i < numSearches; ++i) {
+                            searchPoints[repeat].push_back(startIndex + i);
+                        }
+                    } else {
+                        std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
+                        for (size_t i = 0; i < numSearches; ++i) {
+                            searchPoints[repeat].push_back(indexDist(rng));
+                        }
+                    }
+                }
+            } else {
+                searchPoints.resize(1);
+                searchPoints[0].resize(numSearches);
+                for(size_t i = 0; i<numSearches; i++)
+                    searchPoints[0].push_back(i);
             }
         }
-    }
+
+        void nextRepeat() {
+            currentRepeat += 1;
+            currentRepeat %= searchPoints.size();
+        }
+
+        void reset() {
+            currentRepeat = 0;
+        }
 };

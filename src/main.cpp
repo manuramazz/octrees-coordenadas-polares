@@ -40,7 +40,7 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Sort the point cloud
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
+    SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
 
     OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
     obPointer.searchBench();
@@ -69,7 +69,7 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encodin
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    const SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
+    SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
     OctreeBenchmark<Octree_t, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
     ob.parallelScalabilityBenchmark();
 }
