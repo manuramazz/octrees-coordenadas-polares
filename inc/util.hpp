@@ -33,7 +33,9 @@ bool checkMemoryAlligned(std::vector<T> vec) {
   return (reinterpret_cast<std::uintptr_t>(data) % CACHE_LINE_SIZE == 0);
 }
 
-
+size_t vectorMemorySize(const auto& vec) {
+	return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
+}
 
 // Memory Handling
 namespace mem

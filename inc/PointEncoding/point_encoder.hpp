@@ -193,7 +193,7 @@ public:
      * @param precomputedRadii The precomputed radii corresponding to that level.
      * @return A pair containing the center point and the radii vector.
      */
-    inline std::pair<Point, Vector> getCenterAndRadii(key_t code, uint32_t level, const Box &bbox, 
+    inline Point getCenter(key_t code, uint32_t level, const Box &bbox, 
             const double* halfLengths, const std::vector<Vector> precomputedRadii) const {
         // Decode the points back into their integer coordinates
         coords_t min_x, min_y, min_z;
@@ -213,7 +213,7 @@ public:
             bbox.minZ() + min_z * halfLengths[2] * 2
         ) + precomputedRadii[level];
         
-        return {center, precomputedRadii[level]};
+        return center;
     }
 
     /// @brief Count the leading zeros in a binary key.

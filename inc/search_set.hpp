@@ -26,28 +26,21 @@ struct SearchSet {
             : numSearches(all ? points.size() : n), sequential(seq || all), currentRepeat(0) {
             std::mt19937 rng;
             rng.seed(42);
-            if(numSearches != points.size()) {
-                searchPoints.resize(mainOptions.repeats);
-                for(int repeat = 0; repeat < mainOptions.repeats; repeat++) {
-                    searchPoints[repeat].reserve(numSearches);
-                    if(sequential) {
-                        std::uniform_int_distribution<size_t> startIndexDist(0, points.size() - numSearches);
-                        size_t startIndex = startIndexDist(rng);
-                        for (size_t i = 0; i < numSearches; ++i) {
-                            searchPoints[repeat].push_back(startIndex + i);
-                        }
-                    } else {
-                        std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
-                        for (size_t i = 0; i < numSearches; ++i) {
-                            searchPoints[repeat].push_back(indexDist(rng));
-                        }
+            searchPoints.resize(mainOptions.repeats);
+            for(int repeat = 0; repeat < mainOptions.repeats; repeat++) {
+                searchPoints[repeat].reserve(numSearches);
+                if(sequential) {
+                    std::uniform_int_distribution<size_t> startIndexDist(0, points.size() - numSearches);
+                    size_t startIndex = startIndexDist(rng);
+                    for (size_t i = 0; i < numSearches; ++i) {
+                        searchPoints[repeat].push_back(startIndex + i);
+                    }
+                } else {
+                    std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
+                    for (size_t i = 0; i < numSearches; ++i) {
+                        searchPoints[repeat].push_back(indexDist(rng));
                     }
                 }
-            } else {
-                searchPoints.resize(1);
-                searchPoints[0].resize(numSearches);
-                for(size_t i = 0; i<numSearches; i++)
-                    searchPoints[0].push_back(i);
             }
         }
 

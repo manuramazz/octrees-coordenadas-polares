@@ -38,17 +38,61 @@ private:
     using key_t = PointEncoding::key_t;
     using coords_t = PointEncoding::coords_t;
 
-    PointEncoder& enc;
-
     /// @brief The minimum octant radius to have in a leaf (TODO: this could be implemented in halfLength compuutation, but do we really need it?)
 	static constexpr double MIN_OCTANT_RADIUS = 0;
-
-	/// @brief The default size of the search set in KNN
-	static constexpr size_t DEFAULT_KNN = 100;
 
 	/// @brief The number of octants per internal node
 	static constexpr uint8_t OCTANTS_PER_NODE  = 8;
 
+    /// @brief Leaves of the Octree, destroyed after build
+    struct LeafPart {
+        /**
+         * @brief The leaves of the octree in cornerstone array format.
+         * @details This array contains encoded (Hilbert or Morton) points (interpreted here as octal digit numbers) satisfying certain constraints:
+         * 1. The length of the array is nLeaf + 1
+         * 2. The first element is 0 and the last element 8^MAX_DEPTH, where MAX_DEPTH is the maximum depth of the encoding system 
+         * (i.e. an upper bound for every possible encoding of a point)
+         * 3. The array is sorted in increasing order and the distance between two consecutive elements is 8^l, where l is less or equal
+         * to MAX_DEPTH
+         * 
+         * The array is initialized to {0, 8^MAX_DEPTH} and then subdivided into 8 equally sized bins if the number of points with encoding
+         * between two leaves is greater than mainOptions.maxPointsLeaf.
+         * 
+         * For more details about the construction, check the cornerstone paper, section 4.
+         */
+        std::vector<key_t> leaves; 
+
+        /// @brief  This array contains how many points have an encoding with a value between two of the leaves
+        std::vector<size_t> counts;
+
+        /// @brief This array is simply an exclusive scan of counts, and marks the index of the first point for a leaf
+        std::vector<size_t> layout;
+    };
+
+    /// @brief Internal part of the Octree, destroyed after build
+    struct InternalPart {
+        /**
+        * @brief The Warren-Salmon encoding of each node in the octree
+        * @details For a given (internal or leaf) node, we store its position on the octree using this array, the position for a node at depth
+        * n will be given by 0 000 000 ... 1 x1y1z1 ... xnynzn. This allows for traversals needed in neighbourhood search.
+        * 
+        * The process to obtain this array and link it with the leaves array is detailed in the cornerstone paper, section 5.
+        */
+        std::vector<key_t> prefixes;
+
+        /// @brief The parent index of every group of 8 sibling nodes
+        std::vector<uint32_t> parents; // TODO: this may not be needed
+
+        /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
+        std::vector<size_t> levelRange;
+
+        /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
+        std::vector<int32_t> internalToLeaf;
+
+        /// @brief The reverse mapping of internalToLeaf
+        std::vector<int32_t> leafToInternal;
+    };
+    
     /// @brief Number of leaves and internal nodes in the octree. Equal to size of the leaves vector - 1.
     uint32_t nLeaf;
 
@@ -58,54 +102,23 @@ private:
     /// @brief Total number of nodes in the octree. Equal to nLeaf + nInternal.
     uint32_t nTotal;
 
-    /**
-     * @brief The leaves of the octree in cornerstone array format.
-     * @details This array contains encoded (Hilbert or Morton) points (interpreted here as octal digit numbers) satisfying certain constraints:
-     * 1. The length of the array is nLeaf + 1
-     * 2. The first element is 0 and the last element 8^MAX_DEPTH, where MAX_DEPTH is the maximum depth of the encoding system 
-     * (i.e. an upper bound for every possible encoding of a point)
-     * 3. The array is sorted in increasing order and the distance between two consecutive elements is 8^l, where l is less or equal
-     * to MAX_DEPTH
-     * 
-     * The array is initialized to {0, 8^MAX_DEPTH} and then subdivided into 8 equally sized bins if the number of points with encoding
-     * between two leaves is greater than mainOptions.maxPointsLeaf.
-     * 
-     * For more details about the construction, check the cornerstone paper, section 4.
-     */
-    std::vector<key_t> leaves; 
-
-    /// @brief  This array contains how many points have an encoding with a value between two of the leaves
-    std::vector<size_t> counts;
-
-    /// @brief This array is simply an exclusive scan of counts, and marks the index of the first point for a leaf
-    std::vector<size_t> layout;
-
-    /// @brief This array is built from exclusiveScan via a traversal, and marks the index of the first and last points for a leaf or internal node
-    std::vector<std::pair<size_t, size_t>> internalLayoutRanges;
+    /// @brief The maximum depth seen in the octree
+    uint32_t maxDepthSeen = 0;
 
     /**
-     * @brief The Warren-Salmon encoding of each node in the octree
-     * @details For a given (internal or leaf) node, we store its position on the octree using this array, the position for a node at depth
-     * n will be given by 0 000 000 ... 1 x1y1z1 ... xnynzn. This allows for traversals needed in neighbourhood search.
-     * 
-     * The process to obtain this array and link it with the leaves array is detailed in the cornerstone paper, section 5.
+     * The next 4 arrays contain the important information for neighbor searches
      */
-    std::vector<key_t> prefixes;
-
-    /// @brief Index of the first child of each node (if 0 we have a leaf)
+    /// @brief Index of the first child of each node (if 0 we have a leaf). This is the array used during DFS Octree searches.
     std::vector<uint32_t> offsets;
 
-    /// @brief The parent index of every group of 8 sibling nodes
-    std::vector<uint32_t> parents; // TODO: this may not be needed
+    /// @brief This array is built from exclusiveScan via a traversal, and marks the index of the first and last points for a leaf or internal node.
+    std::vector<std::pair<size_t, size_t>> internalLayoutRanges;
 
-    /// @brief First node index of every tree level (L+2 elements where L is MAX_DEPTH)
-    std::vector<size_t> levelRange;
+    /// @brief The center points of each node in the octree
+    std::vector<Point> centers;
 
-    /// @brief A map between the internal representation at offsets and the one in cornerstone format in leaves
-    std::vector<int32_t> internalToLeaf;
-
-    /// @brief The reverse mapping of internalToLeaf
-    std::vector<int32_t> leafToInternal;
+    /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
+    std::vector<Vector> precomputedRadii;
 
     /**
      * @brief A reference to the array of points that we sort
@@ -114,47 +127,26 @@ private:
      */
     std::vector<Point_t> &points;
 
-    /// @brief The encodings of the points in the octree
-    std::vector<key_t> codes;
-
-    /// @brief The center points of each node in the octree
-    std::vector<Point> centers;
-
-    /// @brief The vector of radii of each node in the octree
-    std::vector<Vector> radii;
-
     /// @brief The global bounding box of the octree
     Box box;
 
-    /// @brief A simple vector containinf the radii of each level in the octree to speed up computations.
-    std::vector<Vector> precomputedRadii;
+    /// @brief A reference to the PointEncoder used to sort the cloud before starting the LinearOctree build.
+    PointEncoder& enc;
+
+    /// @brief The encodings of the points in the octree
+    std::vector<key_t> &codes;
 
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     double halfLengths[3];
-    
-    /// @brief The maximum depth seen in the octree
-    uint32_t maxDepthSeen = 0;
 
-    size_t vectorMemorySize(const auto& vec) {
-        return sizeof(vec) + vec.size() * sizeof(typename std::decay_t<decltype(vec)>::value_type);
-    }
-
-    /// @brief Returns the memory footprint of the octree (without counting points)
+    /// @brief Returns the memory footprint of the octree (without counting references)
     size_t computeMemorySize() {
         size_t total_size = 0;
-        total_size += vectorMemorySize(leaves);
-        total_size += vectorMemorySize(counts);
-        total_size += vectorMemorySize(layout);
         total_size += vectorMemorySize(internalLayoutRanges);
-        total_size += vectorMemorySize(prefixes);
         total_size += vectorMemorySize(offsets);
-        total_size += vectorMemorySize(parents);
-        total_size += vectorMemorySize(levelRange);
-        total_size += vectorMemorySize(internalToLeaf);
-        total_size += vectorMemorySize(leafToInternal);
         total_size += vectorMemorySize(centers);
-        total_size += vectorMemorySize(radii);
-        total_size += sizeof(precomputedRadii) + sizeof(halfLengths) + sizeof(box) + sizeof(maxDepthSeen) + sizeof(points);
+        total_size += vectorMemorySize(precomputedRadii);
+        total_size +=  sizeof(box) + sizeof(maxDepthSeen) + sizeof(nLeaf) + sizeof(nInternal) + sizeof(nTotal) + sizeof(halfLengths);
         return total_size;
     }
 
@@ -166,11 +158,11 @@ private:
      * 
      * @param nodeOps The output array of decisions, of length leaves.size()-1
      */
-    bool rebalanceDecision(std::vector<size_t> &nodeOps) {
+    bool rebalanceDecision(LeafPart &leaf, std::vector<size_t> &nodeOps) {
         bool converged = true;
         #pragma omp parallel for schedule(static)
-            for(int i = 0; i<leaves.size()-1; i++) {
-                nodeOps[i] = calculateNodeOp(i);
+            for(int i = 0; i<leaf.leaves.size()-1; i++) {
+                nodeOps[i] = calculateNodeOp(leaf, i);
                 if(nodeOps[i] != 1) converged = false;
             }
         return converged;
@@ -188,21 +180,21 @@ private:
      * 
      * @param index The leaf array index
      */
-    uint32_t calculateNodeOp(uint32_t index) {
-        auto [sibling, level] = siblingAndLevel(index);
+    uint32_t calculateNodeOp(LeafPart &leaf, uint32_t index) {
+        auto [sibling, level] = siblingAndLevel(leaf, index);
 
         if(sibling > 0) {
             // We have 8 siblings next to each other, could merge this node if the count of all siblings is less MAX_COUNT
             uint32_t parentIndex = index - sibling;
-            size_t parentCount =    counts[parentIndex]   + counts[parentIndex+1]+ 
-                                    counts[parentIndex+2] + counts[parentIndex+3]+ 
-                                    counts[parentIndex+4] + counts[parentIndex+5]+
-                                    counts[parentIndex+6] + counts[parentIndex+7];
+            size_t parentCount =    leaf.counts[parentIndex]   + leaf.counts[parentIndex+1]+ 
+                                    leaf.counts[parentIndex+2] + leaf.counts[parentIndex+3]+ 
+                                    leaf.counts[parentIndex+4] + leaf.counts[parentIndex+5]+
+                                    leaf.counts[parentIndex+6] + leaf.counts[parentIndex+7];
             if(parentCount <= mainOptions.maxPointsLeaf)
                 return 0; // merge
         }
         
-        uint32_t nodeCount = counts[index];
+        uint32_t nodeCount = leaf.counts[index];
         // Decide if we split this leaf or not
         // split into 4 layers
         if (nodeCount > mainOptions.maxPointsLeaf * 512 && level + 3 < enc.maxDepth()) { 
@@ -236,9 +228,9 @@ private:
      * 
      * @param index The leaf index to find
      */
-    inline std::pair<int32_t, uint32_t> siblingAndLevel(uint32_t index) {
-        key_t node = leaves[index];
-        key_t range = leaves[index+1] - node;
+    inline std::pair<int32_t, uint32_t> siblingAndLevel(LeafPart &leaf, uint32_t index) {
+        key_t node = leaf.leaves[index];
+        key_t range = leaf.leaves[index+1] - node;
         uint32_t level = enc.getLevel(range);
         if(level == 0) {
             return {-1, level};
@@ -248,7 +240,7 @@ private:
 
         // Checks if all siblings are on the tree, to do this, checks if the difference between the two parent nodes corresponding
         // to the code parent and the next parent is the range spanned by two consecutive codes at that level
-        bool siblingsOnTree = leaves[index - siblingId + 8] == (leaves[index - siblingId] + enc.nodeRange(level - 1));
+        bool siblingsOnTree = leaf.leaves[index - siblingId + 8] == (leaf.leaves[index - siblingId] + enc.nodeRange(level - 1));
         if(!siblingsOnTree) siblingId = -1;
 
         return {siblingId, level};
@@ -262,20 +254,20 @@ private:
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      * @param nodeOps The array of operations performed in the first step (g1)
      */
-    void rebalanceTree(std::vector<key_t> &newLeaves, std::vector<size_t> &nodeOps) {
-        size_t n = leaves.size() - 1;
+    void rebalanceTree(LeafPart &leaf, std::vector<key_t> &newLeaves, std::vector<size_t> &nodeOps) {
+        size_t n = leaf.leaves.size() - 1;
 
         // Exclusive scan, step g2
         exclusiveScan(nodeOps.data(), n+1);
 
         // Initialization of the new leafs array
         newLeaves.resize(nodeOps[n] + 1);
-        newLeaves.back() = leaves.back();
+        newLeaves.back() = leaf.leaves.back();
 
         // Compute the operations
         #pragma omp parallel for schedule(static)
             for (size_t i = 0; i < n; ++i) {
-                processNode(i, nodeOps, newLeaves);
+                processNode(leaf, i, nodeOps, newLeaves);
             }
     }
 
@@ -290,14 +282,14 @@ private:
      * @param nodeOps The operation to be performed on the index
      * @param newLeaves The new leaves array that will be swapped with the current one after this function execution
      */
-    void processNode(size_t index, std::vector<size_t> &nodeOps, std::vector<key_t> &newLeaves) {
+    void processNode(LeafPart &leaf, size_t index, std::vector<size_t> &nodeOps, std::vector<key_t> &newLeaves) {
         // The original value of the opCode (before exclusive scan)
         size_t opCode = nodeOps[index + 1] - nodeOps[index]; 
         if(opCode == 0)
             return;
     
-        key_t node = leaves[index];
-        key_t range = leaves[index+1] - node;
+        key_t node = leaf.leaves[index];
+        key_t range = leaf.leaves[index+1] - node;
         uint32_t level = enc.getLevel(range);
 
         // The new position to put the node into (nodeOps value after exclusive scan)
@@ -321,18 +313,17 @@ private:
      * @details This functions counts how many particles have encodings at leaf i, that is
      * between leaves[i] and leaves[i+1]
      */
-    void computeNodeCounts() {
+    void computeNodeCounts(LeafPart &leaf) {
         size_t n = 0;
-        if(leaves.size()) n = leaves.size() - 1;
+        if(leaf.leaves.size()) n = leaf.leaves.size() - 1;
         size_t codes_size = codes.size();
         size_t firstNode = 0;
         size_t lastNode = n;
 
         // Find general bounds for the codes array
         if(codes.size() > 0) {
-            firstNode = std::upper_bound(leaves.begin(), leaves.end(), codes[0]) - leaves.begin() - 1;
-            lastNode = std::upper_bound(leaves.begin(), leaves.end(), codes[codes_size-1]) - leaves.begin();
-            assert(firstNode <= lastNode);
+            firstNode = std::upper_bound(leaf.leaves.begin(), leaf.leaves.end(), codes[0]) - leaf.leaves.begin() - 1;
+            lastNode = std::upper_bound(leaf.leaves.begin(), leaf.leaves.end(), codes[codes_size-1]) - leaf.leaves.begin();
         } else {
             firstNode = n, lastNode = n;
         }
@@ -341,9 +332,9 @@ private:
         #pragma omp parallel for schedule(static)
             for(size_t i = 0; i<n; i++) {
                 if(i < firstNode || i >= lastNode)
-                    counts[i] = 0;
+                    leaf.counts[i] = 0;
                 else
-                    counts[i] = calculateNodeCount(leaves[i], leaves[i+1]);
+                    leaf.counts[i] = calculateNodeCount(leaf.leaves[i], leaf.leaves[i+1]);
             }
     }
 
@@ -384,71 +375,74 @@ private:
     }
 
     /// @brief Create the prefixes and internaltoleaf arrays for the leafs
-    void createUnsortedLayout() {
+    void createUnsortedLayout(LeafPart &leaf, InternalPart &inter) {
         for(size_t i = 0; i<nLeaf; i++) {
-            key_t key = leaves[i];
-            uint32_t level = enc.getLevel(leaves[i+1] - key);
-            prefixes[i + nInternal] = enc.encodePlaceholderBit(key, level);
-            internalToLeaf[i + nInternal] = i + nInternal;
+            key_t key = leaf.leaves[i];
+            uint32_t level = enc.getLevel(leaf.leaves[i+1] - key);
+            inter.prefixes[i + nInternal] = enc.encodePlaceholderBit(key, level);
+            inter.internalToLeaf[i + nInternal] = i + nInternal;
 
-            uint32_t prefixLength = enc.commonPrefix(key, leaves[i+1]);
+            uint32_t prefixLength = enc.commonPrefix(key, leaf.leaves[i+1]);
             if(prefixLength % 3 == 0 && i < nLeaf - 1) {
                 uint32_t octIndex = (i + binaryKeyWeight(key, prefixLength / 3)) / 7;
-                prefixes[octIndex] = enc.encodePlaceholderBit(key, prefixLength / 3);
-                internalToLeaf[octIndex] = octIndex;
+                inter.prefixes[octIndex] = enc.encodePlaceholderBit(key, prefixLength / 3);
+                inter.internalToLeaf[octIndex] = octIndex;
             }
         }
     }
 
     /// @brief Determine octree subdivision level boundaries
-    void getLevelRange() {
+    void getLevelRange(InternalPart &inter) {
         for(uint32_t level = 0; level <= enc.maxDepth(); level++) {
-            auto it = std::lower_bound(prefixes.begin(), prefixes.end(), enc.encodePlaceholderBit(0, level));
-            levelRange[level] = std::distance(prefixes.begin(), it);
+            auto it = std::lower_bound(inter.prefixes.begin(), inter.prefixes.end(), enc.encodePlaceholderBit(0, level));
+            inter.levelRange[level] = std::distance(inter.prefixes.begin(), it);
         }
-        levelRange[enc.maxDepth() + 1] = nTotal;
+        inter.levelRange[enc.maxDepth() + 1] = nTotal;
     }
 
     /// @brief Extract parent/child relationships from binary tree and translate to sorted order
-    void linkTree() {
+    void linkTree(InternalPart &inter) {
         #pragma omp parallel for schedule(static)
             for(int i = 0; i<nInternal; i++) {
-                size_t idxA = leafToInternal[i];
-                key_t prefix = prefixes[idxA];
+                size_t idxA = inter.leafToInternal[i];
+                key_t prefix = inter.prefixes[idxA];
                 key_t nodeKey = enc.decodePlaceholderBit(prefix);
                 unsigned prefixLength = enc.decodePrefixLength(prefix);
                 unsigned level = prefixLength / 3;
-                assert(level < enc.maxDepth());
+                if(level >= enc.maxDepth()) {
+                    std::cerr << "Max depth exceeded on linkTree" << std::endl;
+                    exit(-1);
+                }
 
                 key_t childPrefix = enc.encodePlaceholderBit(nodeKey, level + 1);
 
-                size_t leafSearchStart = levelRange[level + 1];
-                size_t leafSearchEnd   = levelRange[level + 2];
-                auto childIdx = std::distance(prefixes.begin(), 
-                    std::lower_bound(prefixes.begin() + leafSearchStart, prefixes.begin() + leafSearchEnd, childPrefix));
+                size_t leafSearchStart = inter.levelRange[level + 1];
+                size_t leafSearchEnd   = inter.levelRange[level + 2];
+                auto childIdx = std::distance(inter.prefixes.begin(), 
+                    std::lower_bound(inter.prefixes.begin() + leafSearchStart, inter.prefixes.begin() + leafSearchEnd, childPrefix));
 
-                if (childIdx != leafSearchEnd && childPrefix == prefixes[childIdx]) {
+                if (childIdx != leafSearchEnd && childPrefix == inter.prefixes[childIdx]) {
                     offsets[idxA] = childIdx;
                     // We only store the parent once for every group of 8 siblings.
                     // This works as long as each node always has 8 siblings.
                     // Subtract one because the root has no siblings.
-                    parents[(childIdx - 1) / 8] = idxA;
+                    inter.parents[(childIdx - 1) / 8] = idxA;
                 }
             } 
     }
     
     /// @brief Computes the ranges of point indexes covered by internal or leafs nodes
-    std::pair<size_t, size_t> computeInternalNodeLayouts(uint32_t node = 0) {
+    std::pair<size_t, size_t> computeInternalNodeLayouts(LeafPart &leaf, InternalPart &inter, uint32_t node = 0) {
         // If node is a leaf, get its internal layout from the two consecutive leafs on the layout array
         if(offsets[node] == 0) {
-            internalLayoutRanges[node] = std::make_pair(layout[internalToLeaf[node]], layout[internalToLeaf[node] + 1]);
+            internalLayoutRanges[node] = std::make_pair(leaf.layout[inter.internalToLeaf[node]], leaf.layout[inter.internalToLeaf[node] + 1]);
             return internalLayoutRanges[node];
         }
 
         // Compute recursively (post-order DFS) the count of the internal node. It will be the total range spanned by its children.
         for(uint8_t octant = 0; octant < OCTANTS_PER_NODE; octant++) {
             uint32_t child = offsets[node] + octant;
-            auto childLayout = computeInternalNodeLayouts(child);
+            auto childLayout = computeInternalNodeLayouts(leaf, inter, child);
             if(octant == 0)
                 internalLayoutRanges[node].first = childLayout.first;
             else if(octant == OCTANTS_PER_NODE-1)
@@ -470,24 +464,28 @@ public:
                         PointEncoder& enc,
                         std::shared_ptr<EncodingOctreeLog> log = nullptr)
         : points(points), enc(enc), codes(codes), box(box)  {
-        
         static_assert(!std::is_same_v<std::decay_t<PointEncoder>, PointEncoding::NoEncoding>,
-                    "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
-        setupBbox();
+            "Encoder cannot be an instance of NoEncoding when using LinearOctree.");
+        
+        // Temporal structs for the variables in the leaf and internal parts of the octree that we wont use during searches
+        LeafPart leaf;
+        InternalPart inter;
+
+        setupBbox(inter);
 
         TimeWatcher tw;
         // Leaf construction
         tw.start();
-        buildOctreeLeaves();
+        buildOctreeLeaves(leaf);
         tw.stop();
         if(log)
             log->octreeLeafTime = tw.getElapsedDecimalSeconds();
         
         // Internal part construction
         tw.start();
-        resize();
-        buildOctreeInternal();
-        computeGeometry();
+        resize(inter);
+        buildOctreeInternal(leaf, inter);
+        computeGeometry(inter);
         tw.stop();
         if(log)
             log->octreeInternalTime = tw.getElapsedDecimalSeconds();
@@ -517,9 +515,9 @@ public:
      * each unit of the morton encoded integer coordinates
      * 3. Precomputes radii for all the possible levels
      */
-    void setupBbox() {
+    void setupBbox(InternalPart &inter) {
         precomputedRadii = std::vector<Vector>(enc.maxDepth() + 1);
-        levelRange = std::vector<size_t>(enc.maxDepth() + 2);
+        inter.levelRange = std::vector<size_t>(enc.maxDepth() + 2);
         // Compute the physical half lengths for multiplying with the encoded coordinates
         halfLengths[0] = 0.5f * enc.eps() * (box.maxX() - box.minX());
         halfLengths[1] = 0.5f * enc.eps() * (box.maxY() - box.minY());
@@ -536,14 +534,19 @@ public:
     }
 
     /// @brief Builds the octeee leaves array by repeatingly calling @ref updateOctreeLeaves()
-    void buildOctreeLeaves() {
+    void buildOctreeLeaves(LeafPart &leaf) {
         // Builds the octree sequentially using the cornerstone algorithm
         // We start with 0, UPPER_BOUND on the leaves. Remember that UPPER_BOUND is 100000...000 with as many 0s as MAX_DEPTH, and it can never be reached by a code
-        leaves = std::vector<key_t>{0, enc.upperBound()};
-        counts = {codes.size()};
+        leaf.leaves = std::vector<key_t>{0, enc.upperBound()};
+        leaf.counts = {codes.size()};
 
-        while(!updateOctreeLeaves())
-            ;
+        while(!updateOctreeLeaves(leaf));
+
+        nLeaf = leaf.leaves.size() - 1;
+
+        // Perform the exclusive scan to get the layout indices (first index in the codes for each leaf)
+        leaf.layout.resize(nLeaf+1);
+        std::exclusive_scan(leaf.counts.begin(), leaf.counts.end() + 1, leaf.layout.begin(), 0);
     }
 
     /**
@@ -551,39 +554,31 @@ public:
      * 
      * @details Convergence is achieved when all the node operations to be done are equal to 1
      */
-    bool updateOctreeLeaves() {
-        std::vector<size_t> nodeOps(leaves.size());
-        bool converged = rebalanceDecision(nodeOps);
+    bool updateOctreeLeaves(LeafPart &leaf) {
+        std::vector<size_t> nodeOps(leaf.leaves.size());
+        bool converged = rebalanceDecision(leaf, nodeOps);
         if(!converged) {
-            std::vector<key_t> newTree;
-            rebalanceTree(newTree, nodeOps);
-            counts.resize(newTree.size()-1);
-            swap(leaves, newTree);
-
-            computeNodeCounts();
+            std::vector<key_t> newLeaves;
+            rebalanceTree(leaf, newLeaves, nodeOps);
+            leaf.counts.resize(newLeaves.size()-1);
+            swap(leaf.leaves, newLeaves);
+            computeNodeCounts(leaf);
         }
         return converged;
     }
 
-    void resize() {
+    void resize(InternalPart &inter) {
         // Compute the final sizes of the octree
-        nLeaf = leaves.size() - 1;
         nInternal = (nLeaf - 1) / 7;
         nTotal = nLeaf + nInternal;
-
         // Resize the other fields
-        prefixes.resize(nTotal);
+        inter.prefixes.resize(nTotal);
         offsets.resize(nTotal+1);
-        parents.resize((nTotal-1) / 8);
-        internalToLeaf.resize(nTotal);
-        leafToInternal.resize(nTotal);
+        inter.parents.resize((nTotal-1) / 8);
+        inter.internalToLeaf.resize(nTotal);
+        inter.leafToInternal.resize(nTotal);
         centers.resize(nTotal);
-        radii.resize(nTotal);
-        layout.resize(leaves.size());
         internalLayoutRanges.resize(nTotal);
-
-        // Perform the exclusive scan to get the layout indices (first index in the codes for each leaf)
-        std::exclusive_scan(counts.begin(), counts.end() + 1, layout.begin(), 0);
     }
 
     /**
@@ -591,43 +586,44 @@ public:
      * 
      * @details Follows the process indicated in the cornerstone octree paper, section 5. 
      */
-    void buildOctreeInternal() {
-        createUnsortedLayout();
+    void buildOctreeInternal(LeafPart &leaf, InternalPart &inter) {
+        createUnsortedLayout(leaf, inter);
         // Sort by key where the keys are the prefixes and the values to sort internalToLeaf
         std::vector<std::pair<key_t, uint32_t>> prefixes_internalToLeaf(nTotal);
         for(int i = 0; i<nTotal; i++) {
-            prefixes_internalToLeaf[i] = {prefixes[i], internalToLeaf[i]};
+            prefixes_internalToLeaf[i] = {inter.prefixes[i], inter.internalToLeaf[i]};
         }
         std::stable_sort(prefixes_internalToLeaf.begin(), prefixes_internalToLeaf.end(), [](const auto &t1, const auto &t2) {
             return t1.first < t2.first;
         });
 
         for(int i = 0; i<nTotal; i++) {
-            prefixes[i] = prefixes_internalToLeaf[i].first;
-            internalToLeaf[i] = prefixes_internalToLeaf[i].second;
+            inter.prefixes[i] = prefixes_internalToLeaf[i].first;
+            inter.internalToLeaf[i] = prefixes_internalToLeaf[i].second;
         }
+        prefixes_internalToLeaf.clear();
 
         // Compute the reverse mapping leafToInternal
         for (uint32_t i = 0; i < nTotal; ++i) {
-            leafToInternal[internalToLeaf[i]] = i;
+            inter.leafToInternal[inter.internalToLeaf[i]] = i;
         }
 
         // Offset by the number of internal nodes
         for (uint32_t i = 0; i < nTotal; ++i) {
-            internalToLeaf[i] -= nInternal;
+            inter.internalToLeaf[i] -= nInternal;
         }
 
         // Find the LO array
-        getLevelRange();
+        getLevelRange(inter);
 
         // Clear child offsets
         std::fill(offsets.begin(), offsets.end(), 0);
 
         // Compute the links
-        linkTree();
+        linkTree(inter);
 
         // Compute internal node layouts
-        computeInternalNodeLayouts();
+        computeInternalNodeLayouts(leaf, inter);
     }
 
 
@@ -639,14 +635,13 @@ public:
      * and could be removed if memory becomes a constraint. This stuff can be computed on the fly
      * during neighbourhood searches.
      */
-    void computeGeometry() {
+    void computeGeometry(InternalPart &inter) {
         #pragma omp parallel for schedule(static)
-            for(uint32_t i = 0; i<prefixes.size(); i++) {
-                key_t prefix = prefixes[i];
+            for(uint32_t i = 0; i<inter.prefixes.size(); i++) {
+                key_t prefix = inter.prefixes[i];
                 key_t startKey = enc.decodePlaceholderBit(prefix);
                 uint32_t level = enc.decodePrefixLength(prefix) / 3;
-                std::tie(centers[i], radii[i]) = 
-                    enc.getCenterAndRadii(startKey, level, box, halfLengths, precomputedRadii);
+                centers[i] = enc.getCenter(startKey, level, box, halfLengths, precomputedRadii);
             }
     }
 
@@ -667,7 +662,7 @@ public:
      */
     template<class C, class A>
     void singleTraversal(C&& continuationCriterion, A&& endpointAction) const {
-        bool descend = continuationCriterion(0);
+        bool descend = continuationCriterion(0, 0);
         if (!descend) return;
 
         if (offsets[0] == 0) {
@@ -676,28 +671,27 @@ public:
             return;
         }
 
-        uint32_t stack[128];
-        stack[0] = 0;
+        std::pair<uint32_t, uint32_t> stack[128]; // node, depth
+        stack[0] = {0, 0};
 
         uint32_t stackPos = 1;
         uint32_t node = 0; // Start at the root
-
+        uint32_t currDepth = 0;
         do {
             for (int octant = 0; octant < OCTANTS_PER_NODE; ++octant) {
                 uint32_t child = offsets[node] + octant;
-                bool descend = continuationCriterion(child);
+                bool descend = continuationCriterion(child, currDepth + 1);
                 if (descend) {
                     if (offsets[child] == 0) {
                         // Leaf node reached
                         endpointAction(child);
                     } else {
                         assert(stackPos < 128);
-                        stack[stackPos++] = child; // Push into the stack
+                        stack[stackPos++] = {child, currDepth + 1};
                     }
                 }
             }
-            node = stack[--stackPos];
-
+            std::tie(node, currDepth) = stack[--stackPos];
         } while (node != 0); // The root node is obtained, search finished
     }
 
@@ -712,9 +706,9 @@ public:
     template<typename Kernel>
     [[nodiscard]] std::vector<Point_t*> neighbors(const Kernel& k) const {
         std::vector<Point_t*> ptsInside;
-        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+        auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->radii[nodeIndex];
+            auto nodeRadii = this->precomputedRadii[currDepth];
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, all add points and prune
@@ -766,9 +760,9 @@ public:
     template<typename Kernel>
     [[nodiscard]] NeighborSet<Point_t> neighborsStruct(const Kernel& k) {
         NeighborSet<Point_t> result(&points);
-        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+        auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->radii[nodeIndex];
+            auto nodeRadii = this->precomputedRadii[currDepth];
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, add octant to the result
@@ -840,11 +834,10 @@ public:
     template<typename Kernel>
     [[nodiscard]] NeighborSet<Point_t> neighborsApprox(const Kernel& k, uint32_t precisionLevel, bool upperBound) {
         NeighborSet<Point_t> result(&points);
-        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
+        auto checkBoxIntersect = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->radii[nodeIndex];
-            uint32_t nodeDepth = enc.decodePrefixLength(this->prefixes[nodeIndex]) / 3;
-            if(nodeDepth > precisionLevel) {
+            auto nodeRadii = this->precomputedRadii[currDepth];
+            if(currDepth > precisionLevel) {
                 // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
                     result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
@@ -924,51 +917,6 @@ public:
 	[[nodiscard]] inline NeighborSet<Point_t> searchNeighborsApprox(const Point& p, const Vector& radii, double tolerancePercentage, bool upperBound) {
 		const auto kernel = kernelFactory<kernel_type>(p, radii);
 		return neighborsApprox(kernel, tolerancePercentage, upperBound);
-	}
-
-    /**
-     * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radius Radius of the kernel to be used
-     * The signature of the function should be equivalent to `bool cnd(const typename &p);`
-     * @return Points inside the given kernel
-     */
-	template<typename Kernel>
-	[[nodiscard]] size_t numNeighbors(const Kernel& k) const {
-        size_t ptsInside = 0;
-        auto checkBoxIntersect = [&](uint32_t nodeIndex) {
-            auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->radii[nodeIndex];
-            switch (k.boxIntersect(nodeCenter, nodeRadii)) {
-                case KernelAbstract::IntersectionJudgement::INSIDE:
-                    // Completely inside, all add points except center and prune
-                    ptsInside += this->internalLayoutRanges[nodeIndex].second - this->internalLayoutRanges[nodeIndex].first;
-                    return false;
-                case KernelAbstract::IntersectionJudgement::OVERLAP:
-                    // Overlaps but not inside, keep descending
-                    return true;
-                case  KernelAbstract::IntersectionJudgement::OUTSIDE:
-                    // Completely outside, prune
-                    return false;
-                default:
-                    return false;
-            }
-        };
-        
-        auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
-            // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
-            auto* startPtr = points.data() + startIndex;
-            auto* endPtr = points.data() + endIndex;
-            for (; startPtr != endPtr; ++startPtr) {
-                if (k.isInside(*startPtr)) {
-                    ptsInside++;
-                }
-            }
-        };
-        singleTraversal(checkBoxIntersect, findAndIncrementPointsCount);
-        return ptsInside;
 	}
 
     /**
@@ -1061,36 +1009,25 @@ public:
 		return neighbors(outerKernel, condition);
 	}
 
-	/**
-     * @brief Search neighbors function. Given a point and a radius, return the number of points inside a given kernel type
-     * @param p Center of the kernel to be used
-     * @param radius Radius of the kernel to be used
-     * @return Points inside the given kernel
-     */	
-    template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline size_t numNeighbors(const Point& p, const double radius) const {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-        // constexpr auto dummyCondition = [](const Point_t&) { return true; };
-		return numNeighbors(kernel);
-	}
-
     // OLD IMPLEMENTATIONS KEPT FOR COMPARISON AND TESTING PURPOSES
     // ALSO THE OLD IMPL CAN TAKE AN ARBITRARY CONDITION ON THE SEARCHES, WHILE THE NEW CAN'T
     template<typename Kernel, typename Function>
     [[nodiscard]] std::vector<Point_t*> neighborsOld(const Kernel& k, Function&& condition) const {
         std::vector<Point_t*> ptsInside;
 
-        auto intersectsKernel = [&](uint32_t nodeIndex) {
-            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
+        auto intersectsKernel = [&](uint32_t nodeIndex, uint32_t nodeDepth) {
+            return k.boxOverlap(this->centers[nodeIndex], this->precomputedRadii[nodeDepth]);
         };
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
-            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
-            for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Point_t& p = this->points[j];  // Now we can get a non-const reference
-                if (k.isInside(p) && condition(p)) {
-                    ptsInside.push_back(&p);
+            // Reached a leaf, add all points inside the kernel
+            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
+            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            auto* startPtr = points.data() + startIndex;
+            auto* endPtr = points.data() + endIndex;
+            for (; startPtr != endPtr; ++startPtr) {
+                if (k.isInside(*startPtr) && condition(*startPtr)) {
+                    ptsInside.push_back(startPtr);
                 }
             }
         };
@@ -1130,40 +1067,6 @@ public:
 		return neighborsOld(outerKernel, condition);
 	}
 
-    template<typename Kernel, typename Function>
-	[[nodiscard]] size_t numNeighborsOld(const Kernel& k, Function&& condition) const {
-        size_t ptsInside = 0;
-
-        auto intersectsKernel = [&](uint32_t nodeIndex) {
-            return k.boxOverlap(this->centers[nodeIndex], this->radii[nodeIndex]);
-        };
-        
-        auto findAndIncrementPointsCount = [&](uint32_t nodeIndex) {
-            uint32_t leafIdx = this->internalToLeaf[nodeIndex];
-            auto pointsStart = this->layout[leafIdx], pointsEnd = this->layout[leafIdx+1];
-            for (int32_t j = pointsStart; j < pointsEnd; j++) {
-                Point_t& p = this->points[j];
-                if (k.isInside(p) && condition(p)) {
-                    ptsInside++;
-                }
-            }
-        };
-        
-        singleTraversal(intersectsKernel, findAndIncrementPointsCount);
-        return ptsInside;
-	}
-    template<Kernel_t kernel_type = Kernel_t::square>
-	[[nodiscard]] inline size_t numNeighborsOld(const Point& p, const double radius) const {
-		const auto kernel = kernelFactory<kernel_type>(p, radius);
-        constexpr auto dummyCondition = [](const Point_t&) { return true; };
-		return numNeighborsOld(kernel, dummyCondition);
-	}
-	template<Kernel_t kernel_type = Kernel_t::square, class Function>
-	[[nodiscard]] inline size_t numNeighborsOld(const Point& p, const double radius, Function&& condition) const {
-		const auto kernel = kernelFactory<kernel>(p, radius);
-		return numNeighborsOld(kernel, std::forward<Function&&>(condition));
-	}
-    
     // Misc. functions for debugging
     void printKey(key_t key) const {
         for(int i=20; i>=0; i--) {
@@ -1202,7 +1105,7 @@ public:
             file << codes[i] << " " << points[i].getX() << " " << points[i].getY() << " " << points[i].getZ() << "\n";
     }
     
-    void logOctree(std::ofstream &file, std::ofstream &pointsFile) {
+    void logOctree(std::ofstream &file, std::ofstream &pointsFile, LeafPart &leaf, InternalPart &inter) {
         std::cout << "(1/2) Logging octree parameters and structure" << std::endl;
         std::string pointTypeName = getPointName<Point_t>();
         std::string encoderTypename = enc.getEncoderName();
@@ -1212,15 +1115,15 @@ public:
         file << "Max. points per leaf: " << mainOptions.maxPointsLeaf << "\n";
         file << "Total number of nodes = " << nTotal << "\n Leafs = " << nLeaf << "\n Internal nodes = " << nInternal << "\n";
         file << "---- Full structure ----";
-        writeVectorBinary(file, leaves, "leaves");
-        writeVector(file, counts, "counts");
-        writeVector(file, layout, "layout");
-        writeVectorBinary(file, prefixes, "prefixes");
+        writeVectorBinary(file, leaf.leaves, "leaves");
+        writeVector(file, leaf.counts, "counts");
+        writeVector(file, leaf.layout, "layout");
+        writeVectorBinary(file, inter.prefixes, "prefixes");
         writeVector(file, offsets, "offsets");
-        writeVector(file, parents, "parents");
-        writeVector(file, levelRange, "levelRange");
-        writeVector(file, internalToLeaf, "internalToLeaf");
-        writeVector(file, leafToInternal, "leafToInternal");
+        writeVector(file, inter.parents, "parents");
+        writeVector(file, inter.levelRange, "levelRange");
+        writeVector(file, inter.internalToLeaf, "internalToLeaf");
+        writeVector(file, inter.leafToInternal, "leafToInternal");
         writeVectorPairs(file, internalLayoutRanges, "internalLayoutRanges");
         file << std::flush;
         
@@ -1233,16 +1136,15 @@ public:
     
     void logOctreeBounds(std::ofstream &outputFile, int max_level) {
         outputFile << "level,upx,upy,upz,downx,downy,downz\n";
-        auto logBounds = [&](uint32_t nodeIndex) {
+        auto logBounds = [&](uint32_t nodeIndex, uint32_t currDepth) {
             auto nodeCenter = this->centers[nodeIndex];
-            auto nodeRadii = this->radii[nodeIndex];
-            uint32_t nodeDepth = enc.decodePrefixLength(this->prefixes[nodeIndex]) / 3;
+            auto nodeRadii = this->precomputedRadii[currDepth];
             auto up = nodeCenter + nodeRadii;
             auto down = nodeCenter - nodeRadii;
-            outputFile << nodeDepth << "," << up.getX() << "," << up.getY() << "," << up.getZ() << "," 
+            outputFile << currDepth << "," << up.getX() << "," << up.getY() << "," << up.getZ() << "," 
                 << down.getX() << "," << down.getY() << "," << down.getZ() << "\n";
 
-            return nodeDepth+1 <= max_level;
+            return currDepth+1 <= max_level;
         };
         
         auto logBoundsLeaf = [&](uint32_t nodeIndex) {
