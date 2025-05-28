@@ -4,12 +4,11 @@
 #include "main_options.hpp"
 #include <random>
 
-template <typename Point_t>
 struct SearchSet {
     // a different one for each repeat on random subsets
         std::vector<std::vector<size_t>> searchPoints;
         int currentRepeat;
-        const size_t numSearches;
+        const size_t numSearches, cloudSize;
         bool sequential;
 
         /**
@@ -18,25 +17,25 @@ struct SearchSet {
          * @param n The size of the searchSet to be contructed
          * @param points A reference to the array of points (not stored for now)
          * @param seq Whether to choose a sequential slice of points or sample random points
-         * @param all Whether to have all the indexes on the searchSet. If set to true, then n=points.size() and seq=True
+         * @param all Whether to have all the indexes on the searchSet. If set to true, then n=cloudSize and seq=True
          * Only use all in small clouds and with a reasonable radius, since otherwise it will take forever to run the neighborSearches!
          */
-        SearchSet(size_t n, const std::vector<Point_t>& points, bool seq = mainOptions.sequentialSearches, 
+        SearchSet(size_t n, size_t cloudSize, bool seq = mainOptions.sequentialSearches, 
                 bool all = mainOptions.searchAll)
-            : numSearches(all ? points.size() : n), sequential(seq || all), currentRepeat(0) {
+            : numSearches(all ? cloudSize : n), cloudSize(cloudSize), sequential(seq || all), currentRepeat(0) {
             std::mt19937 rng;
             rng.seed(42);
             searchPoints.resize(mainOptions.repeats);
             for(int repeat = 0; repeat < mainOptions.repeats; repeat++) {
                 searchPoints[repeat].reserve(numSearches);
                 if(sequential) {
-                    std::uniform_int_distribution<size_t> startIndexDist(0, points.size() - numSearches);
+                    std::uniform_int_distribution<size_t> startIndexDist(0, cloudSize - numSearches);
                     size_t startIndex = startIndexDist(rng);
                     for (size_t i = 0; i < numSearches; ++i) {
                         searchPoints[repeat].push_back(startIndex + i);
                     }
                 } else {
-                    std::uniform_int_distribution<size_t> indexDist(0, points.size() - 1);
+                    std::uniform_int_distribution<size_t> indexDist(0, cloudSize - 1);
                     for (size_t i = 0; i < numSearches; ++i) {
                         searchPoints[repeat].push_back(indexDist(rng));
                     }

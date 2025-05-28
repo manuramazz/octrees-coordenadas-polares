@@ -9,7 +9,7 @@ namespace ResultChecking {
     
     template <typename Point_t>
     struct ResultSet {
-        const SearchSet<Point_t>& searchSet;
+        const SearchSet& searchSet;
         std::vector<std::vector<Point_t*>> resultsNeigh;
         std::vector<NeighborSet<Point_t>> resultsNeighStruct;
         std::vector<std::vector<Point_t*>> resultsNeighOld;
@@ -21,7 +21,7 @@ namespace ResultChecking {
         std::vector<NeighborSet<Point_t>> resultsSearchApproxLower;
         double tolerancePercentageUsed;
         
-        ResultSet(const SearchSet<Point_t>& searchSet): searchSet(searchSet) {  }
+        ResultSet(const SearchSet& searchSet): searchSet(searchSet) {  }
 
         // Copy constructor
         ResultSet(const ResultSet& other)

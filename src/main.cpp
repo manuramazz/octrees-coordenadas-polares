@@ -4,7 +4,6 @@
 #include <random>
 #include <optional>
 #include "util.hpp"
-#include "type_names.hpp"
 #include "TimeWatcher.hpp"
 #include "handlers.hpp"
 #include "main_options.hpp"
@@ -22,6 +21,9 @@
 #include "omp.h"
 #include "encoding_octree_log.hpp"
 #include "unibnOctree.hpp"
+#include <pcl/point_cloud.h>
+#include <pcl/octree/octree.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -41,7 +43,7 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Sort the point cloud
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
+    SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
 
     if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PTR)) {
         OctreeBenchmark<Octree, Point_t> obPointer(points, codes, box, enc, searchSet, outputFile);
@@ -54,6 +56,21 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
         OctreeBenchmark<unibn::Octree, Point_t> obUnibn(points, codes, box, enc, searchSet, outputFile);
         obUnibn.searchBench();
+    }
+    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
+        // Convert cloud to PCL cloud
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        cloud->width = points.size();
+        cloud->height = 1;
+        cloud->points.resize(points.size());
+        for(size_t i = 0; i<cloud->size(); i++) {
+            (*cloud)[i].x = points[i].getX();
+            (*cloud)[i].y = points[i].getY();
+            (*cloud)[i].z = points[i].getZ();
+        }
+        std::vector<pcl::PointXYZ> pointsDummy;
+        OctreeBenchmark<pcl::KdTreeFLANN, pcl::PointXYZ> obPCLKD(pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
+        obPCLKD.searchBench();
     }
 }
 
@@ -72,7 +89,7 @@ void parallelScalabilityBenchmark(std::ofstream &outputFile, EncoderType encodin
     auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
 
     // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
-    SearchSet<Point_t> searchSet = SearchSet<Point_t>(mainOptions.numSearches, points);
+    SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
     OctreeBenchmark<Octree_t, Point_t> ob(points, codes, box, enc, searchSet, outputFile);
     ob.parallelScalabilityBenchmark();
 }
@@ -120,7 +137,7 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
 template <template <typename> class Octree_t>
 void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     std::shared_ptr<EncodingOctreeLog> log = std::make_shared<EncodingOctreeLog>();
-    log->pointType = getPointName<Point_t>();
+    log->pointType = "Point";
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
     std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
@@ -170,6 +187,64 @@ void encodingAndOctreeLog(std::ofstream &outputFile, EncoderType encoding) {
     }
     std::cout << *log << std::endl;
     log->toCSV(outputFile);
+}
+
+void pclTests(EncoderType encoding = EncoderType::NO_ENCODING) {
+    auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
+    std::vector<Point_t> points = std::move(pointMetaPair.first);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    auto& enc = getEncoder(encoding);
+    // Sort the point cloud
+    auto [codes, box] = enc.sortPoints<Point_t>(points, metadata);
+    // Create the searchSet (WARMING: this should be done after sorting since it indexes points!)
+    SearchSet searchSet = SearchSet(mainOptions.numSearches, points.size());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    cloud->width = points.size();
+    cloud->height = 1;
+    cloud->points.resize(points.size());
+    for(size_t i = 0; i<cloud->size(); i++) {
+        (*cloud)[i].x = points[i].getX();
+        (*cloud)[i].y = points[i].getY();
+        (*cloud)[i].z = points[i].getZ();
+    }
+    float radius = mainOptions.benchmarkRadii[0];
+
+    // pcl
+    TimeWatcher tw;
+    size_t averageResultSize = 0;
+    std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
+
+    // linoct
+    LinearOctree<Point_t> loct(points, codes, box, enc);
+    averageResultSize = 0;
+    tw.start();
+    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+        for(size_t i = 0; i<searchSet.numSearches; i++) {
+            auto result = loct.searchNeighbors<Kernel_t::sphere>(points[searchIndexes[i]], radius);
+            averageResultSize += result.size();
+        }
+    averageResultSize = averageResultSize / searchSet.numSearches;
+    tw.stop();
+    std::cout << "loct mu: " << averageResultSize << " time: " << tw.getElapsedDecimalSeconds() << std::endl;
+    
+    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+    kdtree.setInputCloud(cloud);
+    averageResultSize = 0;
+    tw.start();
+    #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
+        for(size_t i = 0; i<searchSet.numSearches; i++) {
+            pcl::PointXYZ searchPoint;
+            searchPoint.x = points[searchIndexes[i]].getX();
+            searchPoint.y = points[searchIndexes[i]].getY();
+            searchPoint.z = points[searchIndexes[i]].getZ();
+            std::vector<int> indexes;
+            std::vector<float> distances;
+            averageResultSize += kdtree.radiusSearch(searchPoint, radius, indexes, distances);
+        }
+    averageResultSize = averageResultSize / searchSet.numSearches;
+    tw.stop();
+    std::cout << "pcl kd mu: " << averageResultSize << " time: " << tw.getElapsedDecimalSeconds() << std::endl;
+
 }
 
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
@@ -227,6 +302,7 @@ int main(int argc, char *argv[]) {
         if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D))
             searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
+        pclTests(EncoderType::HILBERT_ENCODER_3D);
         // Output encoded point clouds to the files
         // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
         // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
@@ -250,21 +326,21 @@ int main(int argc, char *argv[]) {
         // outputReorderings(unencodedFile, unencodedFileOct);  
         // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
         // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
-        std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-        std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
-        EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-        }
-        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        }
+        // std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
+        // std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
+        // EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
+        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+        // }
+        // if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
+        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        // }
 
-        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        }
+        // if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
+        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        // }
     }
 
     return EXIT_SUCCESS;

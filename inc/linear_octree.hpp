@@ -10,7 +10,6 @@
 #include "NeighborKernels/KernelFactory.hpp"
 #include "TimeWatcher.hpp"
 #include "Geometry/Box.hpp"
-#include "type_names.hpp"
 #include "neighbor_set.hpp"
 #include "encoding_octree_log.hpp"
 #include "main_options.hpp"
@@ -1109,11 +1108,9 @@ public:
     
     void logOctree(std::ofstream &file, std::ofstream &pointsFile, LeafPart &leaf, InternalPart &inter) {
         std::cout << "(1/2) Logging octree parameters and structure" << std::endl;
-        std::string pointTypeName = getPointName<Point_t>();
         std::string encoderTypename = enc.getEncoderName();
         file << "---- Linear octree parameters ----";
         file << "Encoder: " << encoderTypename << "\n";
-        file << "Point type: " << pointTypeName << "\n";
         file << "Max. points per leaf: " << mainOptions.maxPointsLeaf << "\n";
         file << "Total number of nodes = " << nTotal << "\n Leafs = " << nLeaf << "\n Internal nodes = " << nInternal << "\n";
         file << "---- Full structure ----";
