@@ -11,7 +11,8 @@
 
 namespace fs = std::filesystem;
 
-enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD };
+enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, 
+	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
 constexpr const char* searchAlgoToString(SearchAlgo algo) {
@@ -23,6 +24,7 @@ constexpr const char* searchAlgoToString(SearchAlgo algo) {
 		case SearchAlgo::NEIGHBORS_APPROX: return "neighbors";
 		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
 		case SearchAlgo::NEIGHBORS_PCLKD: return "neighborsPCLKD";
+		case SearchAlgo::NEIGHBORS_PCLOCT: return "neighborsPCLOct";
         default: return "Unknown";
     }
 }
@@ -61,6 +63,7 @@ public:
 	bool sequentialSearches{false};
 	bool searchAll{false};
 	size_t maxPointsLeaf = 128;
+	double pclOctResolution = 0.01;
 
 };
 
@@ -82,7 +85,8 @@ enum LongOptions : int
 	APPROXIMATE_TOLERANCES,
 	NUM_THREADS,
 	SEQUENTIAL_SEARCH_SET,
-	MAX_POINTS_LEAF
+	MAX_POINTS_LEAF,
+	PCL_OCT_RESOLUTION
 };
 
 // Define short options
@@ -105,6 +109,7 @@ const option long_opts[] = {
 	{ "num-threads", required_argument, nullptr, LongOptions::NUM_THREADS },
 	{ "sequential", no_argument, nullptr, LongOptions::SEQUENTIAL_SEARCH_SET },
 	{ "max-leaf", required_argument, nullptr, LongOptions::MAX_POINTS_LEAF },
+	{ "pcl-oct-resolution", required_argument, nullptr, LongOptions::PCL_OCT_RESOLUTION },
 	{ nullptr, 0, nullptr, 0 }
 };
 

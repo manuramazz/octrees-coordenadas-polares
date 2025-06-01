@@ -25,7 +25,8 @@ void printHelp()
 				"'neighborsStruct' optimized search algorithm on linear octree, uses struct of range of indexes for result\n\t"
 				"'neighborsApprox' optimized search algorithm on linear octree, uses approximate searches\n\t"
 				"'neighborsUnibn' search algorithm from unibnOctree\n\t"
-				"'neighborsPCLKD' search algorithm for PCL KD-tree\n"
+				"'neighborsPCLKD' search algorithm for PCL KD-tree\n\t"
+				"'neighborsPCLOct' search algorithm for PCL Octree\n"
 			"-e, --encodings: Specify which encodings (Reordering SFCs) to use (comma-separated or 'all'), default=all, possible values:\n\t"
 				"'none' run pointer-based octree algos selected (i.e. neighborsPtr) without encoding\n\t"
 				"'mort' run both octrees with their selected algos with Morton SFC Reordering\n\t"
@@ -38,7 +39,8 @@ void printHelp()
 			"--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n"
 			"--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)\n"
 			"--sequential: Make the search set sequential instead of random\n"
-			"--max-leaf: Maximum numbers of points in an octree leaf (default = 128)\n";
+			"--max-leaf: Maximum numbers of points in an octree leaf (default = 128)\n"
+			"--pcl-oct-resolution: Minimum octant size for subdivision in PCL Octree (which doesn't accept a max leaf parameter)\n";
 	exit(1);
 }
 
@@ -94,7 +96,8 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
         {"neighborsStruct", SearchAlgo::NEIGHBORS_STRUCT},
 		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX},
 		{"neighborsUnibn", SearchAlgo::NEIGHBORS_UNIBN},
-		{"neighborsPCLKD", SearchAlgo::NEIGHBORS_PCLKD}
+		{"neighborsPCLKD", SearchAlgo::NEIGHBORS_PCLKD},
+		{"neighborsPCLOct", SearchAlgo::NEIGHBORS_PCLOCT}
     };
 
     std::set<SearchAlgo> selectedSearchAlgos;
@@ -256,7 +259,9 @@ void processArgs(int argc, char** argv)
 			case LongOptions::MAX_POINTS_LEAF:
 				mainOptions.maxPointsLeaf = std::stoul(std::string(optarg));
 				break;
-			
+			case LongOptions::PCL_OCT_RESOLUTION:
+				mainOptions.pclOctResolution = std::stod(std::string(optarg));
+				break;
 			default:
 				printHelp();
 				break;

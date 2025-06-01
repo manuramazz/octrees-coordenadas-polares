@@ -22,7 +22,7 @@
 #include "encoding_octree_log.hpp"
 #include "unibnOctree.hpp"
 #include <pcl/point_cloud.h>
-#include <pcl/octree/octree.h>
+#include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
 namespace fs = std::filesystem;
@@ -57,7 +57,8 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
         OctreeBenchmark<unibn::Octree, Point_t> obUnibn(points, codes, box, enc, searchSet, outputFile);
         obUnibn.searchBench();
     }
-    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
+    if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD) 
+        || mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
         // Convert cloud to PCL cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
         cloud->width = points.size();
@@ -69,8 +70,17 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
             (*cloud)[i].z = points[i].getZ();
         }
         std::vector<pcl::PointXYZ> pointsDummy;
-        OctreeBenchmark<pcl::KdTreeFLANN, pcl::PointXYZ> obPCLKD(pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
-        obPCLKD.searchBench();
+        if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
+            OctreeBenchmark<pcl::KdTreeFLANN, pcl::PointXYZ> obPCLKD(
+                    pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
+            obPCLKD.searchBench();
+        }
+        
+        if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
+            OctreeBenchmark<pcl::octree::OctreePointCloudSearch, pcl::PointXYZ> obPCLKD(
+                    pointsDummy, codes, box, enc, cloud, searchSet, outputFile);
+            obPCLKD.searchBench();
+        }
     }
 }
 

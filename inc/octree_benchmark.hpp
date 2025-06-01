@@ -11,7 +11,7 @@
 #include "main_options.hpp"
 #include "unibnOctree.hpp"
 #include <pcl/point_cloud.h>
-#include <pcl/octree/octree.h>
+#include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
 using namespace ResultChecking;
@@ -34,7 +34,8 @@ class OctreeBenchmark {
         SearchSet &searchSet;
         ResultSet<Point_t> resultSet;
 
-        size_t searchNeighPCLKD(float radii) {
+        // works for both KD-tree and Octree
+        size_t searchNeighPCL(float radii) {
             size_t averageResultSize = 0;
             std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
             #pragma omp parallel for schedule(runtime) reduction(+:averageResultSize)
@@ -150,6 +151,8 @@ class OctreeBenchmark {
                 return "unibnOctree";
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 return "PCLKdTree";
+            } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                return "PCLOctree";
             }
         }
 
@@ -256,19 +259,29 @@ class OctreeBenchmark {
             if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 oct = std::make_unique<pcl::KdTreeFLANN<Point_t>>();
                 oct->template setInputCloud(pclCloud);
+            } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                oct = std::make_unique<pcl::octree::OctreePointCloudSearch<Point_t>>(mainOptions.pclOctResolution);
+                oct->template setInputCloud(pclCloud);
+                oct->template addPointsFromInputCloud();
             } else {
                 static_assert("Wrong constructor for this octree type");
             }
         }
 
-        void benchmarkSearchNeighPCLKD(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
+        void benchmarkSearchNeighPCL(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
             omp_set_num_threads(numThreads);
             const auto kernelStr = "Sphere";
             auto [stats, averageResultSize] = benchmarking::benchmark<size_t>(repeats, [&]() { 
-                return searchNeighPCLKD(radius); 
+                return searchNeighPCL(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighborsPCLKD", kernelStr, radius, stats, averageResultSize, numThreads);
+            std::string algoName;
+            if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
+                algoName = "PCLKdTree";
+            } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                algoName = "PCLOctree";
+            }
+            appendToCsv(algoName, kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
@@ -347,7 +360,8 @@ class OctreeBenchmark {
             } 
             else if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
                 availableAlgos = static_cast<int>(mainOptions.searchAlgos.size());
-                for (auto nonLoctAlgos : {SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS_UNIBN, SearchAlgo::NEIGHBORS_PCLKD}) {
+                for (auto nonLoctAlgos : {SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS_UNIBN, 
+                    SearchAlgo::NEIGHBORS_PCLKD, SearchAlgo::NEIGHBORS_PCLOCT}) {
                     if (mainOptions.searchAlgos.contains(nonLoctAlgos)) {
                         availableAlgos--;
                     }
@@ -358,6 +372,9 @@ class OctreeBenchmark {
             } 
             else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD) ? 1 : 0;
+            }
+            else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                availableAlgos = mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT) ? 1 : 0;
             }
 
             // Calculate total number of benchmark functionc alls
@@ -575,17 +592,22 @@ class OctreeBenchmark {
                         }
                         printBenchmarkUpdate("neighborsUnibn", ++current, benchmarkRadii[r], numThreads[th]);
                     // pcl kdtree
-                    } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
-                        if(algos.contains(SearchAlgo::NEIGHBORS_PCLKD)) {
-                            for (const auto & kernel: kernels) {
-                                switch(kernel) {
-                                     case Kernel_t::sphere:
-                                        benchmarkSearchNeighPCLKD(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                }
+                    } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>> 
+                        || std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                        for (const auto & kernel: kernels) {
+                            switch(kernel) {
+                                    case Kernel_t::sphere:
+                                    benchmarkSearchNeighPCL(repeats, benchmarkRadii[r], numThreads[th]);
+                                    break;
                             }
                         }
-                        printBenchmarkUpdate("neighborsPCLKD", ++current, benchmarkRadii[r], numThreads[th]);
+                        std::string algoName;
+                        if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
+                            algoName = "PCLKdTree";
+                        } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                            algoName = "PCLOctree";
+                        }
+                        printBenchmarkUpdate(algoName, ++current, benchmarkRadii[r], numThreads[th]);
                     }
                 }
             }
