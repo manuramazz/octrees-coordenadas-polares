@@ -268,7 +268,7 @@ class OctreeBenchmark {
                 return searchNeighPCLKD(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("pclkdNeighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
+            appendToCsv("neighborsPCLKD", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
@@ -279,7 +279,7 @@ class OctreeBenchmark {
                 return searchNeighUnibn<kernel>(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("unibnNeighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
+            appendToCsv("neighborsUnibn", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
@@ -290,7 +290,13 @@ class OctreeBenchmark {
                 return searchNeigh<kernel>(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighSearch", kernelStr, radius, stats, averageResultSize, numThreads);
+            std::string algoName;
+            if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+                algoName = "neighborsPtr";
+            } else {
+                algoName = "neighborsPrune";
+            }
+            appendToCsv(algoName, kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
@@ -301,7 +307,7 @@ class OctreeBenchmark {
                 return searchNeighStruct<kernel>(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighSearchStruct", kernelStr, radius, stats, averageResultSize, numThreads);
+            appendToCsv("neighborsStruct", kernelStr, radius, stats, averageResultSize, numThreads);
         }
 
         template<Kernel_t kernel>
@@ -313,13 +319,13 @@ class OctreeBenchmark {
                 return searchNeighApprox<kernel>(radius, tolerancePercentage, false); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighSearchApproxLower", kernelStr, radius, statsLower, averageResultSizeLower, numThreads, tolerancePercentage);
+            appendToCsv("neighborsApproxLower", kernelStr, radius, statsLower, averageResultSizeLower, numThreads, tolerancePercentage);
 
             auto [statsUpper, averageResultSizeUpper] = benchmarking::benchmark<size_t>(repeats, [&]() { 
                 return searchNeighApprox<kernel>(radius, tolerancePercentage, true); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighSearchApproxUpper", kernelStr, radius, statsUpper, averageResultSizeUpper, numThreads, tolerancePercentage);
+            appendToCsv("neighborsApproxUpper", kernelStr, radius, statsUpper, averageResultSizeUpper, numThreads, tolerancePercentage);
         }
 
         template<Kernel_t kernel>
@@ -330,7 +336,7 @@ class OctreeBenchmark {
                 return searchNeighOld<kernel>(radius); 
             }, useWarmup);
             searchSet.reset();
-            appendToCsv("neighOldSearch", kernelStr, radius, stats, averageResultSize, numThreads);
+            appendToCsv("neighbors", kernelStr, radius, stats, averageResultSize, numThreads);
         }
         
         size_t getTotalAmountOfRuns() {

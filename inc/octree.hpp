@@ -27,8 +27,6 @@ class Octree
 	
 	std::vector<Octree>   octants_{};
 	Point                 center_{};
-	Point                 min_{};
-	Point                 max_{};
 	std::vector<Point_t*> points_{};
 	Vector   radii_{};
 
@@ -48,8 +46,6 @@ class Octree
 
 	inline void setOctants(const std::vector<Octree>& octants) { octants_ = octants; }
 	inline void setCenter(const Point& center) { center_ = center; }
-	inline void setMin(const Point& min) { min_ = min; }
-	inline void setMax(const Point& max) { max_ = max; }
 
 	[[nodiscard]] inline const std::vector<Point_t*>& getPoints() const { return points_; }
 
@@ -57,11 +53,6 @@ class Octree
 
 	inline void setPoints(const std::vector<Point_t*>& points) { points_ = points; }
 	inline void setRadii(Vector radii) { radii_ = radii; }
-
-	[[nodiscard]] inline const Point& getMin() const { return min_; }
-	[[nodiscard]] inline const Point& getMax() const { return max_; }
-
-	void computeOctreeLimits();
 
 	[[nodiscard]] inline double getDensity() const
 	/*
@@ -79,8 +70,6 @@ class Octree
 	[[nodiscard]] std::vector<std::pair<Point, double>> computeDensities() const;
 	void logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const;
 	[[nodiscard]] std::vector<std::pair<Point, size_t>> computeNumPoints() const;
-
-	[[nodiscard]] bool isInside2D(const Point& p) const;
 
 	void   insertPoints(std::vector<Point_t>& points);
 	void   insertPoints(std::vector<Point_t*>& points);

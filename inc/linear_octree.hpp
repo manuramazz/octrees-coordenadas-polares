@@ -197,26 +197,11 @@ private:
         
         uint32_t nodeCount = leaf.counts[index];
         // Decide if we split this leaf or not
-        // split into 4 layers
-        if (nodeCount > mainOptions.maxPointsLeaf * 512 && level + 3 < enc.maxDepth()) { 
-            maxDepthSeen = std::max(maxDepthSeen, level + 4);
-            return 4096; 
-        }
-        // split into 3 layers
-        if (nodeCount > mainOptions.maxPointsLeaf * 64 && level + 2 < enc.maxDepth()) { 
-            maxDepthSeen = std::max(maxDepthSeen, level + 3);
-            return 512;
-        }
-        // split into 2 layers
-        if (nodeCount > mainOptions.maxPointsLeaf * 8 && level + 1 < enc.maxDepth()) { 
-            maxDepthSeen = std::max(maxDepthSeen, level + 2);
-            return 64; 
-        }
-        // split into 1 layer
         if (nodeCount > mainOptions.maxPointsLeaf && level < enc.maxDepth()) { 
             maxDepthSeen = std::max(maxDepthSeen, level + 1);
             return 8; 
         }
+        
         // Don't do anything with this leaf
         return 1;
     }
@@ -503,7 +488,11 @@ public:
             log->leafNodes = nLeaf;
             log->internalNodes = nInternal;
             log->maxDepthSeen = maxDepthSeen;
-            log->minRadiusAtMaxDepth = precomputedRadii[maxDepthSeen].getX();
+            log->minRadiusAtMaxDepth = std::min(
+                precomputedRadii[maxDepthSeen].getX(), std::min(
+                precomputedRadii[maxDepthSeen].getY(), 
+                precomputedRadii[maxDepthSeen].getZ()
+            ));
         }
     }
     

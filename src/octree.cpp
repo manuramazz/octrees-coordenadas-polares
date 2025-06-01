@@ -73,20 +73,6 @@ Octree<Point_t>::Octree(Vector center, Vector radii, std::vector<Point_t>& point
 	buildOctree(points);
 }
 
-template <typename Point_t>
-void Octree<Point_t>::computeOctreeLimits()
-/**
-   * Compute the minimum and maximum coordinates of the octree bounding box.
-   */
-{
-	min_.setX(center_.getX() - radii_.getX());
-	min_.setY(center_.getY() - radii_.getY());
-	min_.setZ(center_.getZ() - radii_.getZ());
-	max_.setX(center_.getX() + radii_.getX());
-	max_.setY(center_.getY() + radii_.getY());
-	max_.setZ(center_.getZ() + radii_.getZ());
-}
-
 /// @brief Fill the missing data in the octree log for the Pointer-based Octree 
 template <typename Point_t>
 void Octree<Point_t>::logOctreeData(std::shared_ptr<EncodingOctreeLog> log) const 
@@ -237,22 +223,6 @@ const Octree<Point_t>* Octree<Point_t>::findOctant(const Point_t* p) const
 }
 
 template <typename Point_t>
-bool Octree<Point_t>::isInside2D(const Point& p) const
-/**
-   * Checks if a point is inside the octree limits.
-   * @param p
-   * @return
-   */
-{
-	if (p.getX() >= min_.getX() && p.getY() >= min_.getY())
-	{
-		if (p.getX() <= max_.getX() && p.getY() <= max_.getY()) { return true; }
-	}
-
-	return false;
-}
-
-template <typename Point_t>
 void Octree<Point_t>::insertPoints(std::vector<Point_t>& points)
 {
 	for (Point_t& p : points)
@@ -345,7 +315,6 @@ void Octree<Point_t>::buildOctree(std::vector<Point_t>& points)
    * Build the Octree
    */
 {
-	computeOctreeLimits();
 	insertPoints(points);
 }
 
@@ -355,7 +324,6 @@ void Octree<Point_t>::buildOctree(std::vector<Point_t*>& points)
    * Build the Octree
    */
 {
-	computeOctreeLimits();
 	insertPoints(points);
 }
 
