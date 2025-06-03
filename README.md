@@ -44,10 +44,10 @@ In the project directory, just execute
   cmake --build build
   ```
 
-This creates the executable build/rule-based-classifier-cpp.
+This creates the executable build/octrees-benchmark.
 
 ### Execution
-    ./build/rule-based-classifier-cpp [-i input_file] [-o output_dir]
+    ./build/octrees-benchmark [-i input_file] [-o output_dir]
 
 ## Authorship
 Grupo de Arquitectura de Computadores (GAC)  

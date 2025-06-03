@@ -63,7 +63,7 @@ public:
 	bool sequentialSearches{false};
 	bool searchAll{false};
 	size_t maxPointsLeaf = 128;
-	double pclOctResolution = 0.01;
+	double pclOctResolution = 0.1;
 
 };
 

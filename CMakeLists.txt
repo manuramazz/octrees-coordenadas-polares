@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
-project(rule-based-classifier-cpp LANGUAGES CXX)
+project(octrees-benchmark LANGUAGES CXX)
 
 # Configure CMake
 message("Configuring CMake ...")

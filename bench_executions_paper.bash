@@ -19,27 +19,27 @@ N_SEARCHES="5000"
 # Subset searches
 #for data in "${datasets_low_density[@]}"; do
 #    # Random subset of centers executions, parallel only for this datasets. use repeats here for more robust measurements
-#    ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "$RADII" -b "srch" -s "$N_SEARCHES" --repeats 2
+#    ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "$RADII" -b "srch" -s "$N_SEARCHES" --repeats 2
 #done
 #for data in "${datasets_high_density[@]}"; do
 #    # Random subsets of centers executions
-#    ./build/rule-based-classifier-cpp --kernels "all" -i "$data" -o "$FOLDER/subset" -r "$LOW_RADII" -b "srch" -s "$N_SEARCHES" --repeats 1 --no-warmup
+#    ./build/octrees-benchmark --kernels "all" -i "$data" -o "$FOLDER/subset" -r "$LOW_RADII" -b "srch" -s "$N_SEARCHES" --repeats 1 --no-warmup
 #done 
 
 # Bildstein full searches
-#./build/rule-based-classifier-cpp --kernels "$KERNELS_3D" -i "data/semantic3d/bildstein_station1_xyz_intensity_rgb.txt" -o "$FOLDER/full" -r "0.01,0.05,0.1" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "$KERNELS_3D" -i "data/semantic3d/bildstein_station1_xyz_intensity_rgb.txt" -o "$FOLDER/full" -r "0.01,0.05,0.1" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
 
 # Other full searches
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/dales_las/test/5080_54400.las" -o "$FOLDER/full" -r "10.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/full" -r "3.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Paris_Luxembourg_6.las" -o "$FOLDER/full" -r "3.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/semantic3d/sg27_station8_intensity_rgb.txt" -o "$FOLDER/full" -r "0.05" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/speulderbos/Speulderbos_2017_TLS.las" -o "$FOLDER/full" -r "0.05" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "sphere" -i "data/dales_las/test/5080_54400.las" -o "$FOLDER/full" -r "10.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/full" -r "3.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Paris_Luxembourg_6.las" -o "$FOLDER/full" -r "3.0" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "sphere" -i "data/semantic3d/sg27_station8_intensity_rgb.txt" -o "$FOLDER/full" -r "0.05" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
+#./build/octrees-benchmark --kernels "sphere" -i "data/speulderbos/Speulderbos_2017_TLS.las" -o "$FOLDER/full" -r "0.05" -b "srch" -s "all" --sequential --repeats 1 --no-warmup
 
 
 # Parallel only for Lille_0, both random subset and full (with less radii/numthreads in the full executions)
-#./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_subset" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "$N_SEARCHES" --repeats 1 --no-warmup --num-threads "$THREADS"
-# ./build/rule-based-classifier-cpp --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "all" --repeats 1 --no-warmup --num-threads "$THREADS"
+#./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_subset" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "$N_SEARCHES" --repeats 1 --no-warmup --num-threads "$THREADS"
+# ./build/octrees-benchmark --kernels "sphere" -i "data/paris_lille/Lille_0.las" -o "$FOLDER/parallel_full" -r "0.25,0.5,1.0,2.0" -b "parallel" -s "all" --repeats 1 --no-warmup --num-threads "$THREADS"
 
 # Build and encoding times
 datasets_build_enc=(
@@ -49,6 +49,6 @@ datasets_build_enc=(
     "data/speulderbos/Speulderbos_2017_TLS.las"
 )
 for data in "${datasets_build_enc[@]}"; do
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_64" -b "log" --max-leaf 64 --repeats 3
-    ./build/rule-based-classifier-cpp -i "$data" -o "enc_build_times_128" -b "log" --max-leaf 128 --repeats 3
+    ./build/octrees-benchmark -i "$data" -o "enc_build_times_64" -b "log" --max-leaf 64 --repeats 3
+    ./build/octrees-benchmark -i "$data" -o "enc_build_times_128" -b "log" --max-leaf 128 --repeats 3
 done
