@@ -268,7 +268,7 @@ public:
      */
     constexpr key_t nodeRange(uint32_t treeLevel)
     {
-        assert(treeLevel < maxDepth());
+        assert(treeLevel <= maxDepth());
         uint32_t shifts = maxDepth() - treeLevel;
 
         return 1ul << (key_t(3) * shifts);

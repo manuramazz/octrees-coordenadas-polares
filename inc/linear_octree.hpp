@@ -111,7 +111,7 @@ private:
     std::vector<uint32_t> offsets;
 
     /// @brief This array is built from exclusiveScan via a traversal, and marks the index of the first and last points for a leaf or internal node.
-    std::vector<std::pair<size_t, size_t>> internalLayoutRanges;
+    std::vector<std::pair<size_t, size_t>> internalRanges;
 
     /// @brief The center points of each node in the octree
     std::vector<Point> centers;
@@ -144,7 +144,7 @@ private:
         // Base size of the structure
         memory += sizeof(LinearOctree);
         // Size of each of the 4 arrays used in neighbourhood searches (the others are deleted after build) 
-        memory += vectorMemorySize(internalLayoutRanges);
+        memory += vectorMemorySize(internalRanges);
         memory += vectorMemorySize(offsets);
         memory += vectorMemorySize(centers);
         memory += vectorMemorySize(precomputedRadii);
@@ -418,23 +418,24 @@ private:
     }
     
     /// @brief Computes the ranges of point indexes covered by internal or leafs nodes
-    std::pair<size_t, size_t> computeInternalNodeLayouts(LeafPart &leaf, InternalPart &inter, uint32_t node = 0) {
+    std::pair<size_t, size_t> computeInternalRanges(LeafPart &leaf, InternalPart &inter, uint32_t node = 0) {
         // If node is a leaf, get its internal layout from the two consecutive leafs on the layout array
         if(offsets[node] == 0) {
-            internalLayoutRanges[node] = std::make_pair(leaf.layout[inter.internalToLeaf[node]], leaf.layout[inter.internalToLeaf[node] + 1]);
-            return internalLayoutRanges[node];
+            internalRanges[node] = std::make_pair(leaf.layout[inter.internalToLeaf[node]], leaf.layout[inter.internalToLeaf[node] + 1]);
+            size_t range_size = internalRanges[node].second - internalRanges[node].first;
+            return internalRanges[node];
         }
 
         // Compute recursively (post-order DFS) the count of the internal node. It will be the total range spanned by its children.
         for(uint8_t octant = 0; octant < OCTANTS_PER_NODE; octant++) {
             uint32_t child = offsets[node] + octant;
-            auto childLayout = computeInternalNodeLayouts(leaf, inter, child);
+            auto childLayout = computeInternalRanges(leaf, inter, child);
             if(octant == 0)
-                internalLayoutRanges[node].first = childLayout.first;
+                internalRanges[node].first = childLayout.first;
             else if(octant == OCTANTS_PER_NODE-1)
-                internalLayoutRanges[node].second = childLayout.second;
+                internalRanges[node].second = childLayout.second;
         }
-        return internalLayoutRanges[node];
+        return internalRanges[node];
     }
 
 public:    
@@ -568,7 +569,7 @@ public:
         inter.internalToLeaf.resize(nTotal);
         inter.leafToInternal.resize(nTotal);
         centers.resize(nTotal);
-        internalLayoutRanges.resize(nTotal);
+        internalRanges.resize(nTotal);
     }
 
     /**
@@ -613,7 +614,7 @@ public:
         linkTree(inter);
 
         // Compute internal node layouts
-        computeInternalNodeLayouts(leaf, inter);
+        computeInternalRanges(leaf, inter);
     }
 
 
@@ -702,8 +703,8 @@ public:
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, all add points and prune
-                    size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-                    size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+                    size_t startIndex = this->internalRanges[nodeIndex].first;
+                    size_t endIndex = this->internalRanges[nodeIndex].second;
                     auto* startPtr = points.data() + startIndex;
                     auto* endPtr = points.data() + endIndex;
                     for (; startPtr != endPtr; ++startPtr) {
@@ -722,8 +723,8 @@ public:
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            size_t startIndex = this->internalRanges[nodeIndex].first;
+            size_t endIndex = this->internalRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
             for (; startPtr != endPtr; ++startPtr) {
@@ -756,7 +757,7 @@ public:
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, add octant to the result
-                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
+                    result.addRange(internalRanges[nodeIndex].first, internalRanges[nodeIndex].second);
                     return false;
                 }
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
@@ -770,8 +771,8 @@ public:
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            size_t startIndex = this->internalRanges[nodeIndex].first;
+            size_t endIndex = this->internalRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
             size_t rangeStart = startIndex, rangeEnd = startIndex;
@@ -830,7 +831,7 @@ public:
             if(currDepth > precisionLevel) {
                 // If we are beyond precision and in upper bound mode, add octant to the result
                 if(upperBound) {
-                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
+                    result.addRange(internalRanges[nodeIndex].first, internalRanges[nodeIndex].second);
                 }
                 // Prune either way
                 return false;
@@ -839,7 +840,7 @@ public:
             switch (k.boxIntersect(nodeCenter, nodeRadii)) {
                 case KernelAbstract::IntersectionJudgement::INSIDE: {
                     // Completely inside, add octant to the result
-                    result.addRange(internalLayoutRanges[nodeIndex].first, internalLayoutRanges[nodeIndex].second);
+                    result.addRange(internalRanges[nodeIndex].first, internalRanges[nodeIndex].second);
                     return false;
                 }
                 case KernelAbstract::IntersectionJudgement::OVERLAP:
@@ -853,8 +854,8 @@ public:
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            size_t startIndex = this->internalRanges[nodeIndex].first;
+            size_t endIndex = this->internalRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
             size_t rangeStart = startIndex, rangeEnd = startIndex;
@@ -1011,8 +1012,8 @@ public:
         
         auto findAndInsertPoints = [&](uint32_t nodeIndex) {
             // Reached a leaf, add all points inside the kernel
-            size_t startIndex = this->internalLayoutRanges[nodeIndex].first;
-            size_t endIndex = this->internalLayoutRanges[nodeIndex].second;
+            size_t startIndex = this->internalRanges[nodeIndex].first;
+            size_t endIndex = this->internalRanges[nodeIndex].second;
             auto* startPtr = points.data() + startIndex;
             auto* endPtr = points.data() + endIndex;
             for (; startPtr != endPtr; ++startPtr) {
@@ -1112,7 +1113,7 @@ public:
         writeVector(file, inter.levelRange, "levelRange");
         writeVector(file, inter.internalToLeaf, "internalToLeaf");
         writeVector(file, inter.leafToInternal, "leafToInternal");
-        writeVectorPairs(file, internalLayoutRanges, "internalLayoutRanges");
+        writeVectorPairs(file, internalRanges, "internalRanges");
         file << std::flush;
         
         // write codes and point coordinates
