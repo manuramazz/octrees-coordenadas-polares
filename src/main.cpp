@@ -21,9 +21,11 @@
 #include "omp.h"
 #include "encoding_octree_log.hpp"
 #include "unibnOctree.hpp"
+#ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#endif
 
 namespace fs = std::filesystem;
 using namespace PointEncoding;
@@ -57,6 +59,7 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
         OctreeBenchmark<unibn::Octree, Point_t> obUnibn(points, codes, box, enc, searchSet, outputFile);
         obUnibn.searchBench();
     }
+#ifdef HAVE_PCL
     if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD) 
         || mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT)) {
         // Convert cloud to PCL cloud
@@ -82,6 +85,7 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
             obPCLKD.searchBench();
         }
     }
+#endif
 }
 
 /**

@@ -10,9 +10,11 @@
 #include "search_set.hpp"
 #include "main_options.hpp"
 #include "unibnOctree.hpp"
+#ifdef HAVE_PCL
 #include <pcl/point_cloud.h>
 #include <pcl/octree/octree_search.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#endif
 
 using namespace ResultChecking;
 
@@ -25,9 +27,10 @@ class OctreeBenchmark {
         std::unique_ptr<Octree_t<Point_t>> oct;
         PointEncoder& enc;
         const std::string comment;
-
         std::vector<Point_t>& points;
+#ifdef HAVE_PCL
         pcl::PointCloud<Point_t>::Ptr pclCloud;
+#endif
         std::ofstream &outputFile;
         
         const bool checkResults, useWarmup;
@@ -35,6 +38,7 @@ class OctreeBenchmark {
         ResultSet<Point_t> resultSet;
 
         // works for both KD-tree and Octree
+#ifdef HAVE_PCL
         size_t searchNeighPCL(float radii) {
             size_t averageResultSize = 0;
             std::vector<size_t> &searchIndexes = searchSet.searchPoints[searchSet.currentRepeat];
@@ -49,6 +53,7 @@ class OctreeBenchmark {
             searchSet.nextRepeat();
             return averageResultSize;
         }
+#endif
 
         template<Kernel_t kernel>
         size_t searchNeighUnibn(float radii) {
@@ -149,11 +154,14 @@ class OctreeBenchmark {
                 return "Octree";
             } else if constexpr (std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
                 return "unibnOctree";
-            } else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
+            } 
+#ifdef HAVE_PCL
+            else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 return "PCLKdTree";
             } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
                 return "PCLOctree";
             }
+#endif
         }
 
         inline void appendToCsv(const std::string& operation, const std::string& kernel, const float radius, const benchmarking::Stats<>& stats, 
@@ -168,9 +176,13 @@ class OctreeBenchmark {
             std::string pointTypeName;
             if constexpr(std::is_same_v<Point_t, Point>) {
                 pointTypeName = "Point";
-            } else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
+            }
+#ifdef HAVE_PCL 
+            else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
                 pointTypeName = "PCLPointXYZ";
-            } else {
+            } 
+#endif
+            else {
                 pointTypeName = "UnknownPoint";
             }
             std::string encoderName = enc.getEncoderName();
@@ -198,7 +210,7 @@ class OctreeBenchmark {
                 << getOctreeName() << ',' 
                 << pointTypeName << ','
                 << enc.getEncoderName() << ','
-                << (pclCloud ? pclCloud->size() : points.size()) <<  ','
+                << points.size() <<  ','
                 << fullOp << ',' 
                 << kernel << ',' 
                 << radius << ','
@@ -227,7 +239,7 @@ class OctreeBenchmark {
             outputFile(file),
             checkResults(checkResults),
             useWarmup(useWarmup),
-            resultSet(searchSet) { 
+            resultSet(searchSet){ 
 
             // Conditional initialization of oct based on the type of Octree_t<Point_t>
             if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
@@ -246,6 +258,7 @@ class OctreeBenchmark {
             }
         }
 
+#ifdef HAVE_PCL
         OctreeBenchmark(std::vector<Point_t>& points, std::vector<key_t>& codes, Box box, PointEncoder& enc, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
             SearchSet& searchSet, std::ofstream &file, bool checkResults = mainOptions.checkResults, bool useWarmup = mainOptions.useWarmup) :
             points(points), 
@@ -259,7 +272,8 @@ class OctreeBenchmark {
             if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 oct = std::make_unique<pcl::KdTreeFLANN<Point_t>>();
                 oct->template setInputCloud(pclCloud);
-            } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+            } 
+            else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
                 oct = std::make_unique<pcl::octree::OctreePointCloudSearch<Point_t>>(mainOptions.pclOctResolution);
                 oct->template setInputCloud(pclCloud);
                 oct->template addPointsFromInputCloud();
@@ -267,7 +281,9 @@ class OctreeBenchmark {
                 static_assert("Wrong constructor for this octree type");
             }
         }
+#endif
 
+#ifdef HAVE_PCL
         void benchmarkSearchNeighPCL(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
             omp_set_num_threads(numThreads);
             const auto kernelStr = "Sphere";
@@ -283,6 +299,7 @@ class OctreeBenchmark {
             }
             appendToCsv(algoName, kernelStr, radius, stats, averageResultSize, numThreads);
         }
+#endif
 
         template<Kernel_t kernel>
         void benchmarkSearchNeighUnibn(size_t repeats, float radius, int numThreads = omp_get_max_threads()) {
@@ -370,13 +387,14 @@ class OctreeBenchmark {
             else if constexpr (std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_UNIBN) ? 1 : 0;
             } 
+#ifdef HAVE_PCL
             else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLKD) ? 1 : 0;
             }
             else if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
                 availableAlgos = mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_PCLOCT) ? 1 : 0;
             }
-
+#endif
             // Calculate total number of benchmark functionc alls
             size_t total = execPerAlgo * availableAlgos;
             if(mainOptions.searchAlgos.contains(SearchAlgo::NEIGHBORS_APPROX)) {
@@ -402,9 +420,13 @@ class OctreeBenchmark {
             std::string pointTypeName;
             if constexpr(std::is_same_v<Point_t, Point>) {
                 pointTypeName = "Point";
-            } else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
+            } 
+#ifdef HAVE_PCL
+            else if constexpr(std::is_same_v<Point_t, pcl::PointXYZ>) {
                 pointTypeName = "PCLPointXYZ";
-            } else {
+            } 
+#endif
+            else {
                 pointTypeName = "UnknownPoint";
             }
             std::cout << std::left << "Starting neighbor search benchmark!\n";
@@ -591,8 +613,9 @@ class OctreeBenchmark {
                             }
                         }
                         printBenchmarkUpdate("neighborsUnibn", ++current, benchmarkRadii[r], numThreads[th]);
-                    // pcl kdtree
-                    } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>> 
+                    } 
+#ifdef HAVE_PCL
+                    else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>> 
                         || std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
                         for (const auto & kernel: kernels) {
                             switch(kernel) {
@@ -609,6 +632,7 @@ class OctreeBenchmark {
                         }
                         printBenchmarkUpdate(algoName, ++current, benchmarkRadii[r], numThreads[th]);
                     }
+#endif
                 }
             }
             std::cout << std::endl;

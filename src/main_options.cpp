@@ -25,8 +25,8 @@ void printHelp()
 				"'neighborsStruct' optimized search algorithm on linear octree, uses struct of range of indexes for result\n\t"
 				"'neighborsApprox' optimized search algorithm on linear octree, uses approximate searches\n\t"
 				"'neighborsUnibn' search algorithm from unibnOctree\n\t"
-				"'neighborsPCLKD' search algorithm for PCL KD-tree\n\t"
-				"'neighborsPCLOct' search algorithm for PCL Octree\n"
+				"'neighborsPCLKD' search algorithm for PCL KD-tree (only if PCL was found during build)\n\t"
+				"'neighborsPCLOct' search algorithm for PCL Octree (only if PCL was found during build)\n"
 			"-e, --encodings: Specify which encodings (Reordering SFCs) to use (comma-separated or 'all'), default=all, possible values:\n\t"
 				"'none' run pointer-based octree algos selected (i.e. neighborsPtr) without encoding\n\t"
 				"'mort' run both octrees with their selected algos with Morton SFC Reordering\n\t"
@@ -118,6 +118,15 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
             }
         }
     }
+#ifndef HAVE_PCL
+    if (selectedSearchAlgos.count(SearchAlgo::NEIGHBORS_PCLKD) ||
+        selectedSearchAlgos.count(SearchAlgo::NEIGHBORS_PCLOCT)) {
+        std::cout << "Error: PCL-based search algorithms selected, but HAVE_PCL is not defined. "
+                  << "Please install PCL or disable 'neighborsPCLKD' and 'neighborsPCLOct'.\n";
+        std::exit(EXIT_FAILURE);
+    }
+#endif
+
     return selectedSearchAlgos;
 }
 

@@ -6,7 +6,12 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake/modules"
 
 # Add lib/ folder to the list of folder where CMake looks for packages
 set(LIB_FOLDER "${CMAKE_SOURCE_DIR}/lib")
+set(LOCAL_MODULE_PATH "$ENV{HOME}/local")
+
 list(APPEND CMAKE_MODULE_PATH ${LIB_FOLDER})
+list(APPEND CMAKE_MODULE_PATH ${LOCAL_MODULE_PATH})
+
+
 
 # OpenMP
 find_package(OpenMP REQUIRED)
@@ -49,8 +54,15 @@ else ()
 endif ()
 
 # PCL
-set(PCL_DIR "$ENV{HOME}/local/pcl/share/pcl-1.15")
-find_package(PCL 1.3 REQUIRED)
-include_directories(${PCL_INCLUDE_DIRS})
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
+set(PCL_DIR "$ENV{HOME}/local/pcl/share/pcl-1.15" CACHE PATH "Path to PCL config")
+find_package(PCL 1.3 QUIET)
+
+if(PCL_FOUND)
+    message(STATUS "PCL found: ${PCL_VERSION}")
+    include_directories(${PCL_INCLUDE_DIRS})
+    link_directories(${PCL_LIBRARY_DIRS})
+    add_definitions(${PCL_DEFINITIONS})
+    add_definitions(-DHAVE_PCL)
+else()
+    message(WARNING "PCL not found. Building without PCL support.")
+endif()
