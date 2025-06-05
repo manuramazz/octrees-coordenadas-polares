@@ -515,7 +515,7 @@ class OctreeBenchmark {
                             }
                             printBenchmarkUpdate("neighbors", ++current, benchmarkRadii[r], numThreads[th]);
                         }
-                        if (algos.contains(SearchAlgo::NEIGHBORS_V2)) {
+                        if (algos.contains(SearchAlgo::NEIGHBORS_PRUNE)) {
                             for (const auto& kernel : kernels) {
                                 switch (kernel) {
                                     case Kernel_t::sphere:
@@ -532,7 +532,7 @@ class OctreeBenchmark {
                                         break;
                                 }
                             }
-                            printBenchmarkUpdate("neighborsV2", ++current, benchmarkRadii[r], numThreads[th]);
+                            printBenchmarkUpdate("neighborsPrune", ++current, benchmarkRadii[r], numThreads[th]);
                         }
                         if (algos.contains(SearchAlgo::NEIGHBORS_STRUCT)) {
                             for (const auto& kernel : kernels) {

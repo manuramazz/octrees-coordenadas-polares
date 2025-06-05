@@ -7,40 +7,40 @@
 #include "PointEncoding/point_encoder_factory.hpp"
 main_options mainOptions{};
 
-void printHelp()
-{
+void printHelp() {
 	std::cout
 		<< "Main options:\n"
-			"-h, --help: Show this message\n"
-			"-i: Path to input file\n"
-			"-o: Path to output file\n"
-			"-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
-			"-s, --searches: Number of searches\n"
-			"-t, --repeats: Number of repeats\n"
-			"-k, --kernels: Specify which kernels to use (comma-separated or all). possible values are sphere, cube, square and circle\n"
-			"-a, --search-algo: Specify which search algorithms to run on the linear octree (comma-separated or 'all'), default='neighborsPtr,neighborsV2', possible values:\n\t"
-				"'neighborsPtr' basic search algorihtm on pointer-based octree,\n\t"
-				"'neighbors' basic search algorithm on linear octree\n\t"
-				"'neighborsV2' optimized search algorithm on linear octree, uses octant inside kernel check and bulk insert\n\t"
-				"'neighborsStruct' optimized search algorithm on linear octree, uses struct of range of indexes for result\n\t"
-				"'neighborsApprox' optimized search algorithm on linear octree, uses approximate searches\n\t"
-				"'neighborsUnibn' search algorithm from unibnOctree\n\t"
-				"'neighborsPCLKD' search algorithm for PCL KD-tree (only if PCL was found during build)\n\t"
-				"'neighborsPCLOct' search algorithm for PCL Octree (only if PCL was found during build)\n"
-			"-e, --encodings: Specify which encodings (Reordering SFCs) to use (comma-separated or 'all'), default=all, possible values:\n\t"
-				"'none' run pointer-based octree algos selected (i.e. neighborsPtr) without encoding\n\t"
-				"'mort' run both octrees with their selected algos with Morton SFC Reordering\n\t"
-				"'hilb' run both octrees with their selected algos with Hilbert SFC Reordering\n\n"
-			
-			"Other options:\n"
-			"--debug: Enable debug mode\n"
-			"--check: Enable result checking\n"
-			"--no-warmup: Disable warmup phase\n"
-			"--approx-tol: For specifying tolerance percentage in approximate searches (e.g. 80.0 = 80% tolerance on kernel size), format is list of doubles in format e.g. '10.0,50.0,100.0'\n"
-			"--num-threads: List of number of threads to use in the parallelism scalability benchmark (e.g. 1,2,4,8,16,32)\n"
-			"--sequential: Make the search set sequential instead of random\n"
-			"--max-leaf: Maximum numbers of points in an octree leaf (default = 128)\n"
-			"--pcl-oct-resolution: Minimum octant size for subdivision in PCL Octree (which doesn't accept a max leaf parameter)\n";
+		<< "-h, --help: Show help message\n"
+		<< "-i, --input: Path to input file\n"
+		<< "-o, --output: Path to output file\n"
+		<< "-r, --radii: Benchmark radii (comma-separated, e.g., '2.5,5.0,7.5')\n"
+		<< "-s, --searches: Number of searches (random centers unless --sequential is set), type 'all' to search over the whole cloud (with sequential indexing)\n"
+		<< "-t, --repeats: Number of repeats to do for each benchmark\n"
+		<< "-k, --kernels: Specify which kernels to use (comma-separated or 'all'). Possible values: sphere, cube, square, circle\n"
+		<< "-a, --search-algo: Specify which search algorithms to run (comma-separated or 'all'). Default: neighborsPtr,neighbors,neighborsPrune,neighborsStruct. Possible values:\n"
+		<< "    'neighborsPtr'       - basic search on pointer-based octree\n"
+		<< "    'neighbors'          - basic search on linear octree\n"
+		<< "    'neighborsPrune'     - optimized linear octree search with octant pruning\n"
+		<< "    'neighborsStruct'    - optimized linear search using index ranges\n"
+		<< "    'neighborsApprox'    - approximate search with upper/lower bounds, requires --approx-tol\n"
+		<< "    'neighborsUnibn'     - unibnOctree search\n"
+		<< "    'neighborsPCLKD'     - PCL KD-tree search (if available)\n"
+		<< "    'neighborsPCLOct'    - PCL Octree search (if available)\n"
+		<< "-e, --encodings: Select SFC encodings to reorder the cloud before the searches (comma-separated or 'all'). Default: all. Possible values:\n"
+		<< "    'none'  - no encoding; disables Linear Octree building for those runs\n"
+		<< "    'mort'  - Morton SFC Reordering\n"
+		<< "    'hilb'  - Hilbert SFC Reordering\n\n"
+
+		<< "Other options:\n"
+		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
+		<< "--check: Enable result checking (legacy option; use avg_result_size to verify correctness)\n"
+		<< "--no-warmup: Disable warmup phase\n"
+		<< "--approx-tol: Tolerance values for approximate search (comma-separated e.g., '10.0,50.0,100.0')\n"
+		<< "--num-threads: List of thread counts for scalability test (comma-separated e.g., '1,2,4,8,16,32')\n"
+		<< "               If not specified, OpenMP defaults to maximum threads and no scalability test is run\n"
+		<< "--sequential: Make the search set sequential instead of random (usually faster). Automatically set when -s all is used\n"
+		<< "--max-leaf: Max number of points per octree leaf (default = 128). Does not apply to PCL Octree\n"
+		<< "--pcl-oct-resolution: Min octant size for subdivision in PCL Octree\n";
 	exit(1);
 }
 
@@ -92,7 +92,7 @@ std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& algoStr) {
     static const std::unordered_map<std::string, SearchAlgo> algoMap = {
 		{"neighborsPtr", SearchAlgo::NEIGHBORS_PTR},
         {"neighbors", SearchAlgo::NEIGHBORS},
-        {"neighborsV2", SearchAlgo::NEIGHBORS_V2},
+        {"neighborsPrune", SearchAlgo::NEIGHBORS_PRUNE},
         {"neighborsStruct", SearchAlgo::NEIGHBORS_STRUCT},
 		{"neighborsApprox", SearchAlgo::NEIGHBORS_APPROX},
 		{"neighborsUnibn", SearchAlgo::NEIGHBORS_UNIBN},
@@ -210,10 +210,12 @@ void processArgs(int argc, char** argv)
 				printHelp();
 				break;
 			case 'i':
+			case LongOptions::INPUT:
 				mainOptions.inputFile = fs::path(std::string(optarg));
 				mainOptions.inputFileName = mainOptions.inputFile.stem().string();
 				break;
 			case 'o':
+			case LongOptions::OUTPUT:
 				mainOptions.outputDirName = fs::path(std::string(optarg));
 				break;
 			case 'r':
@@ -245,7 +247,6 @@ void processArgs(int argc, char** argv)
 			case LongOptions::ENCODINGS:
 				mainOptions.encodings = parseEncodingOptions(std::string(optarg));
 				break;
-			
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;
 				break;
@@ -264,7 +265,6 @@ void processArgs(int argc, char** argv)
 			case LongOptions::SEQUENTIAL_SEARCH_SET:
 				mainOptions.sequentialSearches = true;
 				break;
-
 			case LongOptions::MAX_POINTS_LEAF:
 				mainOptions.maxPointsLeaf = std::stoul(std::string(optarg));
 				break;

@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_V2, NEIGHBORS_STRUCT, 
+enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE, NEIGHBORS_STRUCT, 
 	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
 
@@ -19,7 +19,7 @@ constexpr std::string searchAlgoToString(SearchAlgo algo) {
     switch (algo) {
 		case SearchAlgo::NEIGHBORS_PTR: return "neighborsPtr";
         case SearchAlgo::NEIGHBORS: return "neighbors";
-        case SearchAlgo::NEIGHBORS_V2: return "neighborsV2";
+        case SearchAlgo::NEIGHBORS_PRUNE: return "neighborsPrune";
         case SearchAlgo::NEIGHBORS_STRUCT: return "neighborsStruct";
 		case SearchAlgo::NEIGHBORS_APPROX: return "neighbors";
 		case SearchAlgo::NEIGHBORS_UNIBN: return "neighborsUnibn";
@@ -52,7 +52,7 @@ public:
 	size_t numSearches{10000};
 	
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
-	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_V2, SearchAlgo::NEIGHBORS_STRUCT};
+	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
 	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
 
 	bool debug{false};
@@ -71,7 +71,9 @@ extern main_options mainOptions;
 
 enum LongOptions : int
 {
-	HELP = 0,
+	HELP,
+	INPUT,
+	OUTPUT,
 	RADII,
 	REPEATS,
 	SEARCHES,
@@ -95,6 +97,8 @@ const char* const short_opts = "h:i:o:r:s:t:b:k:a:e:cb:";
 // Define long options
 const option long_opts[] = {
 	{ "help", no_argument, nullptr, LongOptions::HELP },
+	{ "input", required_argument, nullptr, LongOptions::INPUT },
+	{ "output", required_argument, nullptr, LongOptions::OUTPUT },
 	{ "radii", required_argument, nullptr, LongOptions::RADII },
 	{ "repeats", required_argument, nullptr, LongOptions::REPEATS },
 	{ "searches", required_argument, nullptr, LongOptions::SEARCHES },
