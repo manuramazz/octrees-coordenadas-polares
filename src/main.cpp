@@ -118,7 +118,6 @@ void approximateSearchLog(std::ofstream &outputFile, EncoderType encoding) {
     }
 }
 
-template <typename Point_t>
 void outputReorderings(std::ofstream &outputFilePoints, std::ofstream &outputFileOct, EncoderType encoding = EncoderType::NO_ENCODING) {
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
@@ -250,48 +249,48 @@ int main(int argc, char *argv[]) {
             searchBenchmark(outputFile, EncoderType::HILBERT_ENCODER_3D);
     } else {
         // Output encoded point clouds to the files (for plots and such)
-        // std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
-        // std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
-        // std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
-        // std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
-        // std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
-        // std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
-        // std::ofstream unencodedFile(unencodedPath, std::ios::app);
-        // std::ofstream mortonFile(mortonPath, std::ios::app);
-        // std::ofstream hilbertFile(hilbertPath, std::ios::app);
-        // std::ofstream unencodedFileOct(unencodedPathOct, std::ios::app);
-        // std::ofstream mortonFileOct(mortonPathOct, std::ios::app);
-        // std::ofstream hilbertFileOct(hilbertPathOct, std::ios::app);
+        std::filesystem::path unencodedPath = mainOptions.outputDirName / "output_unencoded.csv";
+        std::filesystem::path mortonPath = mainOptions.outputDirName / "output_morton.csv";
+        std::filesystem::path hilbertPath = mainOptions.outputDirName / "output_hilbert.csv";
+        std::filesystem::path unencodedPathOct = mainOptions.outputDirName / "output_unencoded_oct.csv";
+        std::filesystem::path mortonPathOct = mainOptions.outputDirName / "output_morton_oct.csv";
+        std::filesystem::path hilbertPathOct = mainOptions.outputDirName / "output_hilbert_oct.csv";
+        std::ofstream unencodedFile(unencodedPath);
+        std::ofstream mortonFile(mortonPath);
+        std::ofstream hilbertFile(hilbertPath);
+        std::ofstream unencodedFileOct(unencodedPathOct);
+        std::ofstream mortonFileOct(mortonPathOct);
+        std::ofstream hilbertFileOct(hilbertPathOct);
         
-        // if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
-        //     !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
-        //     throw std::ios_base::failure("Failed to open output files");
-        // }
+        if (!unencodedFile.is_open() || !mortonFile.is_open() || !hilbertFile.is_open() || 
+            !unencodedFileOct.is_open() || !mortonFileOct.is_open() || !hilbertFileOct.is_open()) {
+            throw std::ios_base::failure("Failed to open output files");
+        }
         
-        // std::cout << "Output files created successfully." << std::endl;
-        // outputReorderings(unencodedFile, unencodedFileOct);  
-        // outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
-        // outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
+        std::cout << "Output files created successfully." << std::endl;
+        outputReorderings(unencodedFile, unencodedFileOct);  
+        outputReorderings(mortonFile, mortonFileOct, EncoderType::MORTON_ENCODER_3D);  
+        outputReorderings(hilbertFile, hilbertFileOct, EncoderType::HILBERT_ENCODER_3D);  
         
         // Encoding and build times benchmark
-        std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
-        std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
-        EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
-        if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-            encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
-        }
-        if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-            encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
-        }
+        // std::filesystem::path encAndOctreeLogsPath = mainOptions.outputDirName / "enc_octree_times.csv";
+        // std::ofstream encAndOctreeLogsFile(encAndOctreeLogsPath);
+        // EncodingOctreeLog::writeCSVHeader(encAndOctreeLogsFile);
+        // if(mainOptions.encodings.contains(EncoderType::NO_ENCODING)) {
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::NO_ENCODING);
+        // }
+        // if(mainOptions.encodings.contains(EncoderType::MORTON_ENCODER_3D)) {
+        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::MORTON_ENCODER_3D);
+        // }
 
-        if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
-            encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-            encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
-        }
+        // if(mainOptions.encodings.contains(EncoderType::HILBERT_ENCODER_3D)) {
+        //     encodingAndOctreeLog<LinearOctree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        //     encodingAndOctreeLog<Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        //     encodingAndOctreeLog<unibn::Octree>(encAndOctreeLogsFile, EncoderType::HILBERT_ENCODER_3D);
+        // }
     }
 
     return EXIT_SUCCESS;
