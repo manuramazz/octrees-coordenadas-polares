@@ -45,6 +45,8 @@ In the project directory, just execute
 This creates the executable at `build/octrees-benchmark`.
 
 ### Execution
+__For usage examples, look at the executions configured for my Bachelor Thesis runs at `benchmark_executions_tfg.bash`__
+
 ## Main Options
 
 | Option | Alias | Description |
