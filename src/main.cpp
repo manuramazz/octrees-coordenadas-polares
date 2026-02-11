@@ -41,7 +41,7 @@ void searchBenchmark(std::ofstream &outputFile, EncoderType encoding = EncoderTy
     // Load points and put their metadata into a separate vector
     auto pointMetaPair = readPoints<Point_t>(mainOptions.inputFile);
     std::vector<Point_t> points = std::move(pointMetaPair.first);
-    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second);
+    std::optional<std::vector<PointMetadata>> metadata = std::move(pointMetaPair.second); 
 
     auto& enc = getEncoder(encoding);
     // Sort the point cloud
