@@ -14,6 +14,7 @@ namespace fs = std::filesystem;
 enum SearchAlgo { NEIGHBORS_PTR, NEIGHBORS, NEIGHBORS_PRUNE, NEIGHBORS_STRUCT, 
 	NEIGHBORS_APPROX, NEIGHBORS_UNIBN, NEIGHBORS_PCLKD, NEIGHBORS_PCLOCT };
 enum EncoderType { MORTON_ENCODER_3D, HILBERT_ENCODER_3D, NO_ENCODING };
+enum LocalReorderType { LOCAL_REORDER_NONE, LOCAL_REORDER_CYLINDRICAL, LOCAL_REORDER_SPHERICAL };
 
 constexpr std::string searchAlgoToString(SearchAlgo algo) {
     switch (algo) {
@@ -38,6 +39,15 @@ constexpr std::string encoderTypeToString(EncoderType enc) {
     }
 }
 
+constexpr std::string localReorderTypeToString(LocalReorderType type) {
+    switch (type) {
+		case LocalReorderType::LOCAL_REORDER_NONE: return "none";
+        case LocalReorderType::LOCAL_REORDER_CYLINDRICAL: return "cylindrical";
+        case LocalReorderType::LOCAL_REORDER_SPHERICAL: return "spherical";
+        default: return "Unknown";
+    }
+}
+
 class main_options
 {
 public:
@@ -54,6 +64,7 @@ public:
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
 	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
+	LocalReorderType localReorder{LocalReorderType::LOCAL_REORDER_NONE};
 
 	bool debug{false};
 	bool checkResults{false};
@@ -80,6 +91,7 @@ enum LongOptions : int
 	KERNELS,
 	SEARCH_ALGOS,
 	ENCODINGS,
+	LOCAL_REORDER,
 	
 	DEBUG,
 	CHECK,
@@ -92,7 +104,7 @@ enum LongOptions : int
 };
 
 // Define short options
-const char* const short_opts = "h:i:o:r:s:t:b:k:a:e:cb:";
+const char* const short_opts = "h:i:o:r:s:t:b:k:a:e:l:cb:";
 
 // Define long options
 const option long_opts[] = {
@@ -105,6 +117,7 @@ const option long_opts[] = {
 	{ "kernels", required_argument, nullptr, LongOptions::KERNELS},
 	{ "search-algos", required_argument, nullptr, LongOptions::SEARCH_ALGOS },
 	{ "encodings", required_argument, nullptr, LongOptions::ENCODINGS },
+	{ "local-reorder", required_argument, nullptr, LongOptions::LOCAL_REORDER },
 
 	{ "debug", no_argument, nullptr, LongOptions::DEBUG },
 	{ "check", no_argument, nullptr, LongOptions::CHECK },
@@ -122,6 +135,7 @@ void setDefaults();
 std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr);
 std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& kernelStr);
 std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr);
+LocalReorderType parseLocalReorderOption(const std::string& reorderStr);
 std::string getKernelListString();
 std::string getSearchAlgoListString();
 std::string getEncoderListString();

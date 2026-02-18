@@ -29,7 +29,11 @@ void printHelp() {
 		<< "-e, --encodings: Select SFC encodings to reorder the cloud before the searches (comma-separated or 'all'). Default: all. Possible values:\n"
 		<< "    'none'  - no encoding; disables Linear Octree building for those runs\n"
 		<< "    'mort'  - Morton SFC Reordering\n"
-		<< "    'hilb'  - Hilbert SFC Reordering\n\n"
+		<< "    'hilb'  - Hilbert SFC Reordering\n"
+		<< "-l, --local-reorder: Specify local reordering strategy. Default: none. Possible values:\n"
+		<< "    'none'        - no local reordering\n"
+		<< "    'cylindrical' - local reordering based in cylindrical coordinates\n"
+		<< "    'spherical'   - local reordering based in spherical coordinates\n\n"
 
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
@@ -159,6 +163,22 @@ std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr) {
     return selectedEncoders;
 }
 
+LocalReorderType parseLocalReorderOption(const std::string& reorderStr) {
+    static const std::unordered_map<std::string, LocalReorderType> reorderMap = {
+        {"none", LocalReorderType::LOCAL_REORDER_NONE},
+        {"cylindrical", LocalReorderType::LOCAL_REORDER_CYLINDRICAL},
+        {"spherical", LocalReorderType::LOCAL_REORDER_SPHERICAL}
+    };
+
+    auto it = reorderMap.find(reorderStr);
+    if (it != reorderMap.end()) {
+        return it->second;
+    } else {
+        std::cerr << "Warning: Unknown local reorder type '" << reorderStr << "'. Using 'none'.\n";
+        return LocalReorderType::LOCAL_REORDER_NONE;
+    }
+}
+
 std::string getKernelListString() {
     std::ostringstream oss;
     auto it = mainOptions.kernels.begin();
@@ -246,6 +266,10 @@ void processArgs(int argc, char** argv)
 			case 'e':
 			case LongOptions::ENCODINGS:
 				mainOptions.encodings = parseEncodingOptions(std::string(optarg));
+				break;
+			case 'l':
+			case LongOptions::LOCAL_REORDER:
+				mainOptions.localReorder = parseLocalReorderOption(std::string(optarg));
 				break;
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;
