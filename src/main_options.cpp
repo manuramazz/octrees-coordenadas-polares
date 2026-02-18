@@ -30,10 +30,11 @@ void printHelp() {
 		<< "    'none'  - no encoding; disables Linear Octree building for those runs\n"
 		<< "    'mort'  - Morton SFC Reordering\n"
 		<< "    'hilb'  - Hilbert SFC Reordering\n"
-		<< "-l, --local-reorder: Specify local reordering strategy. Default: none. Possible values:\n"
+		<< "-l, --local-reorder: Specify local reordering strategies (comma-separated or 'all'). Default: none. Possible values:\n"
 		<< "    'none'        - no local reordering\n"
 		<< "    'cylindrical' - local reordering based in cylindrical coordinates\n"
-		<< "    'spherical'   - local reordering based in spherical coordinates\n\n"
+		<< "    'spherical'   - local reordering based in spherical coordinates\n"
+		<< "    'all'         - includes none, cylindrical, and spherical\n\n"
 
 		<< "Other options:\n"
 		<< "--debug: Enable debug mode (measures octree build and encoding times)\n"
@@ -163,20 +164,33 @@ std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr) {
     return selectedEncoders;
 }
 
-LocalReorderType parseLocalReorderOption(const std::string& reorderStr) {
+std::set<LocalReorderType> parseLocalReorderOptions(const std::string& reorderStr) {
     static const std::unordered_map<std::string, LocalReorderType> reorderMap = {
         {"none", LocalReorderType::LOCAL_REORDER_NONE},
         {"cylindrical", LocalReorderType::LOCAL_REORDER_CYLINDRICAL},
         {"spherical", LocalReorderType::LOCAL_REORDER_SPHERICAL}
     };
 
-    auto it = reorderMap.find(reorderStr);
-    if (it != reorderMap.end()) {
-        return it->second;
+    std::set<LocalReorderType> selectedReorders;
+
+    if (reorderStr == "all") {
+        for (const auto& [key, value] : reorderMap) {
+            selectedReorders.insert(value);
+        }
     } else {
-        std::cerr << "Warning: Unknown local reorder type '" << reorderStr << "'. Using 'none'.\n";
-        return LocalReorderType::LOCAL_REORDER_NONE;
+        std::stringstream ss(reorderStr);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            auto it = reorderMap.find(token);
+            if (it != reorderMap.end()) {
+                selectedReorders.insert(it->second);
+            } else {
+                std::cerr << "Warning: Unknown local reorder type '" << token << "' ignored.\n";
+            }
+        }
     }
+
+    return selectedReorders;
 }
 
 std::string getKernelListString() {
@@ -209,6 +223,18 @@ std::string getEncoderListString() {
     for (; it != mainOptions.encodings.end(); ++it) {
         oss << encoderTypeToString(*it);
         if (std::next(it) != mainOptions.encodings.end()) {
+            oss << ", ";
+        }
+    }
+    return oss.str();
+}
+
+std::string getLocalReorderListString() {
+    std::ostringstream oss;
+    auto it = mainOptions.localReorders.begin();
+    for (; it != mainOptions.localReorders.end(); ++it) {
+        oss << localReorderTypeToString(*it);
+        if (std::next(it) != mainOptions.localReorders.end()) {
             oss << ", ";
         }
     }
@@ -269,7 +295,7 @@ void processArgs(int argc, char** argv)
 				break;
 			case 'l':
 			case LongOptions::LOCAL_REORDER:
-				mainOptions.localReorder = parseLocalReorderOption(std::string(optarg));
+				mainOptions.localReorders = parseLocalReorderOptions(std::string(optarg));
 				break;
 			case LongOptions::DEBUG:
 				mainOptions.debug = true;

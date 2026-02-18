@@ -481,6 +481,7 @@ class OctreeBenchmark {
             const auto& algos = mainOptions.searchAlgos;
             const auto& kernels = mainOptions.kernels;
             const size_t repeats = mainOptions.repeats;
+            const auto& localReorders = mainOptions.localReorders;
 
             if (checkResults) {
                 resultSet.resultsNeighOld.resize(searchSet.numSearches);
@@ -494,8 +495,11 @@ class OctreeBenchmark {
             size_t current = 0;
             for (size_t th = 0; th < numThreads.size(); th++) {                    
                 for (size_t r = 0; r < benchmarkRadii.size(); ++r) {
+                    //TODO: aqui está el bucle de las reordenaciones
                     // Linear octree
                     if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
+                        //TODO: reordenación para linear octree 
+                        //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
                         if (algos.contains(SearchAlgo::NEIGHBORS)) {
                             for (const auto& kernel : kernels) {
                                 switch (kernel) {
@@ -573,6 +577,8 @@ class OctreeBenchmark {
                     }
                     // Pointer-based octree
                     else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+                        //TODO: reordenación para pointer octree
+                        //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
                         if (algos.contains(SearchAlgo::NEIGHBORS_PTR)) {
                             for (const auto& kernel : kernels) {
                                 switch (kernel) {

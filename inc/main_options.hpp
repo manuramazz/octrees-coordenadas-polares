@@ -64,7 +64,7 @@ public:
 	std::set<Kernel_t> kernels{Kernel_t::sphere, Kernel_t::circle, Kernel_t::cube, Kernel_t::square};
 	std::set<SearchAlgo> searchAlgos{SearchAlgo::NEIGHBORS_PTR, SearchAlgo::NEIGHBORS, SearchAlgo::NEIGHBORS_PRUNE, SearchAlgo::NEIGHBORS_STRUCT};
 	std::set<EncoderType> encodings{EncoderType::NO_ENCODING, EncoderType::MORTON_ENCODER_3D, EncoderType::HILBERT_ENCODER_3D};
-	LocalReorderType localReorder{LocalReorderType::LOCAL_REORDER_NONE};
+	std::set<LocalReorderType> localReorders{LocalReorderType::LOCAL_REORDER_NONE};
 
 	bool debug{false};
 	bool checkResults{false};
@@ -135,10 +135,11 @@ void setDefaults();
 std::set<Kernel_t> parseKernelOptions(const std::string& kernelStr);
 std::set<SearchAlgo> parseSearchAlgoOptions(const std::string& kernelStr);
 std::set<EncoderType> parseEncodingOptions(const std::string& kernelStr);
-LocalReorderType parseLocalReorderOption(const std::string& reorderStr);
+std::set<LocalReorderType> parseLocalReorderOptions(const std::string& reorderStr);
 std::string getKernelListString();
 std::string getSearchAlgoListString();
 std::string getEncoderListString();
+std::string getLocalReorderListString();
 void processArgs(int argc, char** argv);
 
 
