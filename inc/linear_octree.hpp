@@ -138,6 +138,34 @@ private:
     /// @brief A vector containing the half-lengths of the minimum measure of the encoding.
     double halfLengths[3];
 
+
+
+    /***************************************************
+    Functions used to reorder points in each leaf 
+    using their polar coordinates after the construction.
+    ****************************************************/
+    /// @brief Returns the number of leaves in the octree
+    size_t getNumLeaves() {
+        return nLeaf;
+    }
+
+    /// @brief Returns the points ranges of the leaf with index i
+    std::pair<size_t, size_t> getLeafRange(size_t i) {
+        assert(i < nLeaf && "Leaf index out of bounds");
+        return internalRanges[i + nInternal];
+    }
+
+    /// @brief Returns the center of the leaf with index i
+    Point getLeafCenter(size_t i) {
+        assert(i < nLeaf && "Leaf index out of bounds");
+        return centers[i + nInternal];
+    }
+    /***************************************************
+    End of functions used in the reordering process
+    ***************************************************/
+
+
+
     /// @brief Returns the memory footprint of the octree (without counting references)
     size_t computeMemoryFootprint() {
         size_t memory = 0;
