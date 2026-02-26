@@ -495,64 +495,85 @@ class OctreeBenchmark {
             size_t current = 0;
             for (size_t th = 0; th < numThreads.size(); th++) {                    
                 for (size_t r = 0; r < benchmarkRadii.size(); ++r) {
-                    //TODO: aqui está el bucle de las reordenaciones
-                    // Linear octree
-                    if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
-                        //TODO: reordenación para linear octree 
-                        //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
-                        if (algos.contains(SearchAlgo::NEIGHBORS)) {
-                            for (const auto& kernel : kernels) {
-                                switch (kernel) {
-                                    case Kernel_t::sphere:
-                                        benchmarkSearchNeighOld<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::circle:
-                                        benchmarkSearchNeighOld<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::cube:
-                                        benchmarkSearchNeighOld<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::square:
-                                        benchmarkSearchNeighOld<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
+                    //Aqui está el bucle de las reordenaciones
+                    for (size_t lr = 0; lr < localReorders.size(); lr++) {
+
+                        ReorderMode mode = localReorders[lr];
+                        // Antes de reordenar, hacer backup y restaurar si es necesario
+                        /// TODO: no sé donde está codes
+                        
+                        std::vector<Point_t> pointsBackup;
+                        std::vector<key_t> codesBackup;
+                        std::optional<std::vector<PointMetadata>> metaBackup;
+                        bool doBackup = (mode != ReorderMode::None);
+                        if (doBackup) {
+                            pointsBackup = points;
+                            codesBackup = codes;
+                            if (meta_opt) metaBackup = *meta_opt;
+                        }   
+
+                        
+
+
+                        // Linear octree
+                        if constexpr (std::is_same_v<Octree_t<Point_t>, LinearOctree<Point_t>>) {
+                            /// TODO: Reordenación para linear octree
+                            //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
+                            
+                            if (algos.contains(SearchAlgo::NEIGHBORS)) {
+                                for (const auto& kernel : kernels) {
+                                    switch (kernel) {
+                                        case Kernel_t::sphere:
+                                            benchmarkSearchNeighOld<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::circle:
+                                            benchmarkSearchNeighOld<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::cube:
+                                            benchmarkSearchNeighOld<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::square:
+                                            benchmarkSearchNeighOld<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                    }
                                 }
+                                printBenchmarkUpdate("neighbors", ++current, benchmarkRadii[r], numThreads[th]);
                             }
-                            printBenchmarkUpdate("neighbors", ++current, benchmarkRadii[r], numThreads[th]);
-                        }
-                        if (algos.contains(SearchAlgo::NEIGHBORS_PRUNE)) {
-                            for (const auto& kernel : kernels) {
-                                switch (kernel) {
-                                    case Kernel_t::sphere:
-                                        benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::circle:
-                                        benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::cube:
-                                        benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::square:
-                                        benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
+                            if (algos.contains(SearchAlgo::NEIGHBORS_PRUNE)) {
+                                for (const auto& kernel : kernels) {
+                                    switch (kernel) {
+                                        case Kernel_t::sphere:
+                                            benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::circle:
+                                            benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::cube:
+                                            benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::square:
+                                            benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                    }
                                 }
+                                printBenchmarkUpdate("neighborsPrune", ++current, benchmarkRadii[r], numThreads[th]);
                             }
-                            printBenchmarkUpdate("neighborsPrune", ++current, benchmarkRadii[r], numThreads[th]);
-                        }
-                        if (algos.contains(SearchAlgo::NEIGHBORS_STRUCT)) {
-                            for (const auto& kernel : kernels) {
-                                switch (kernel) {
-                                    case Kernel_t::sphere:
-                                        benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::circle:
-                                        benchmarkSearchNeighStruct<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::cube:
-                                        benchmarkSearchNeighStruct<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::square:
-                                        benchmarkSearchNeighStruct<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
+                            if (algos.contains(SearchAlgo::NEIGHBORS_STRUCT)) {
+                                for (const auto& kernel : kernels) {
+                                    switch (kernel) {
+                                        case Kernel_t::sphere:
+                                            benchmarkSearchNeighStruct<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::circle:
+                                            benchmarkSearchNeighStruct<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                       case Kernel_t::cube:
+                                            benchmarkSearchNeighStruct<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::square:
+                                            benchmarkSearchNeighStruct<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                    }
                                 }
                             }
                             printBenchmarkUpdate("neighborsStruct", ++current, benchmarkRadii[r], numThreads[th]);
@@ -574,65 +595,72 @@ class OctreeBenchmark {
                                 printBenchmarkUpdate(updateStr, ++current, benchmarkRadii[r], numThreads[th]);
                             }
                         }
-                    }
-                    // Pointer-based octree
-                    else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
-                        //TODO: reordenación para pointer octree
-                        //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
-                        if (algos.contains(SearchAlgo::NEIGHBORS_PTR)) {
-                            for (const auto& kernel : kernels) {
-                                switch (kernel) {
-                                    case Kernel_t::sphere:
-                                        benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::circle:
-                                        benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::cube:
-                                        benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::square:
-                                        benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
+                    
+                        // Pointer-based octree
+                        else if constexpr (std::is_same_v<Octree_t<Point_t>, Octree<Point_t>>) {
+                            //TODO: reordenación para pointer octree
+                            //(estudiar la idea de resetear el octree después de cada reordenación para los casos en los que se reordenan por sphe y cil)
+                            if (algos.contains(SearchAlgo::NEIGHBORS_PTR)) {
+                                for (const auto& kernel : kernels) {
+                                    switch (kernel) {
+                                        case Kernel_t::sphere:
+                                            benchmarkSearchNeigh<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::circle:
+                                            benchmarkSearchNeigh<Kernel_t::circle>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::cube:
+                                            benchmarkSearchNeigh<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::square:
+                                            benchmarkSearchNeigh<Kernel_t::square>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                    }
                                 }
                             }
-                        }
-                        printBenchmarkUpdate("neighborsPtr", ++current, benchmarkRadii[r], numThreads[th]);
-                    // unibn octree
-                    } else if constexpr(std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
-                        if(algos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
+                            printBenchmarkUpdate("neighborsPtr", ++current, benchmarkRadii[r], numThreads[th]);
+                        // unibn octree
+                        } else if constexpr(std::is_same_v<Octree_t<Point_t>, unibn::Octree<Point_t>>) {
+                           if(algos.contains(SearchAlgo::NEIGHBORS_UNIBN)) {
+                               for (const auto & kernel: kernels) {
+                                   switch(kernel) {
+                                        case Kernel_t::sphere:
+                                            benchmarkSearchNeighUnibn<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                        case Kernel_t::cube:
+                                            benchmarkSearchNeighUnibn<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
+                                            break;
+                                    }
+                                }
+                            }
+                            printBenchmarkUpdate("neighborsUnibn", ++current, benchmarkRadii[r], numThreads[th]);
+                        } 
+#ifdef HAVE_PCL
+                        else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>> 
+                            || std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
                             for (const auto & kernel: kernels) {
                                 switch(kernel) {
-                                     case Kernel_t::sphere:
-                                        benchmarkSearchNeighUnibn<Kernel_t::sphere>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                    case Kernel_t::cube:
-                                        benchmarkSearchNeighUnibn<Kernel_t::cube>(repeats, benchmarkRadii[r], numThreads[th]);
-                                        break;
-                                }
-                            }
-                        }
-                        printBenchmarkUpdate("neighborsUnibn", ++current, benchmarkRadii[r], numThreads[th]);
-                    } 
-#ifdef HAVE_PCL
-                    else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>> 
-                        || std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
-                        for (const auto & kernel: kernels) {
-                            switch(kernel) {
                                     case Kernel_t::sphere:
                                     benchmarkSearchNeighPCL(repeats, benchmarkRadii[r], numThreads[th]);
                                     break;
+                                }
                             }
+                            std::string algoName;
+                            if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
+                                algoName = "PCLKdTree";
+                            } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
+                                algoName = "PCLOctree";
+                            }
+                            printBenchmarkUpdate(algoName, ++current, benchmarkRadii[r], numThreads[th]);
                         }
-                        std::string algoName;
-                        if constexpr (std::is_same_v<Octree_t<Point_t>, pcl::KdTreeFLANN<Point_t>>) {
-                            algoName = "PCLKdTree";
-                        } else if constexpr(std::is_same_v<Octree_t<Point_t>, pcl::octree::OctreePointCloudSearch<Point_t>>) {
-                            algoName = "PCLOctree";
-                        }
-                        printBenchmarkUpdate(algoName, ++current, benchmarkRadii[r], numThreads[th]);
-                    }
 #endif
+
+                        // Restaurar puntos y códigos si se hizo backup
+                        if (doBackup) {
+                            points = std::move(pointsBackup);
+                            codes = std::move(codesBackup);
+                            if (meta_opt && metaBackup) *meta_opt = std::move(*metaBackup);
+                    }
                 }
             }
             std::cout << std::endl;
